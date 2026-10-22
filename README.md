@@ -8,7 +8,7 @@ SkillBridge is a modern, mobile-first web platform designed to help young South 
 The frontend is built with **HTML5, CSS3, Vanilla JavaScript (ES6+), and JSON** to demonstrate core frontend engineering without a frontend framework. Stage 2 adds a separate, read-only Node.js API; the existing pages continue to use the local JSON dataset.
 
 # Live Demo
-https://princely24m.github.io/SkillBridge-1.0/
+https://skillbridge-fullstack-wcj0.onrender.com/
 
 ---
 
