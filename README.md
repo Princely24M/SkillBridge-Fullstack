@@ -5,10 +5,10 @@
 
 SkillBridge is a modern, mobile-first web platform designed to help young South Africans discover jobs, internships, learnerships, bursaries, courses, and skills programmes in one accessible, trustworthy location.
 
-The frontend is built with **HTML5, CSS3, Vanilla JavaScript (ES6+), and JSON** to demonstrate core frontend engineering without a frontend framework. Stage 2 adds a separate, read-only Node.js API; the existing pages continue to use the local JSON dataset.
+The project is now a full-stack application: a Node.js + Express API serves data and auth configuration, while the same server also serves the static frontend from the project root. This allows the app to run as a single deployment on platforms like Render without the root route returning the JSON API 404 error.
 
 # Live Demo
-https://skillbridge-fullstack-wcj0.onrender.com/
+https://princely24m.github.io/SkillBridge-1.0/
 
 ---
 
@@ -137,48 +137,54 @@ This application is strictly built with vanilla web technologies to highlight co
 ```text
 SkillBridge/
 │
-├── index.html                   # Home page with hero, categories, featured & deadlines
-├── register.html                # Supabase candidate registration
-├── login.html                   # Supabase candidate login
-├── profile.html                 # Candidate dashboard, profile, and saved opportunities
-├── opportunities.html           # Directory with live keyword search and multi-filters
-├── opportunity-details.html     # Dynamic detail view with interactive checklist
-├── resources.html               # Career preparation guides & scam awareness toolkit
-├── contact.html                 # Contact, Report Opportunity, and Suggest forms
+├── index.html                   # Home page with hero, categories, and opportunity view
+├── register.html                # Candidate registration
+├── login.html                   # Candidate login
+├── profile.html                 # Candidate dashboard and saved opportunities
+├── opportunities.html           # Searchable directory with filters and pagination
+├── opportunity-details.html     # Opportunity detail page
+├── resources.html               # Career skill and scam-awareness content
+├── contact.html                 # Contact and reporting forms
 │
 ├── css/
-│   └── style.css                # Master mobile-first design system and theme styles
+│   └── style.css                # Mobile-first design system and theme styles
 │
 ├── js/
-│   ├── script.js                # Shared vanilla JavaScript application logic
-│   ├── auth.js                  # Supabase Auth, profile, and saved-opportunity flows
-│   └── theme.js                 # Early-loading, persistent light/dark theme
+│   ├── api.js                   # Shared API client for /api requests
+│   ├── auth.js                  # Supabase Auth and saved-opportunity logic
+│   ├── script.js                # Shared frontend rendering logic
+│   ├── theme.js                 # Persisted light/dark theme handling
+│   └── admin.js                 # Admin auth checks and dashboard behaviour
 │
 ├── data/
-│   └── opportunities.json       # Legacy frontend dataset containing 100 records
+│   └── opportunities.json       # Legacy sample dataset kept for reference/demo use
 │
 ├── server/
-│   ├── app.js                   # Express routes and API error handling
-│   ├── index.js                 # API startup and environment configuration
+│   ├── app.js                   # Express app, static file hosting, API routes, and 404 handling
+│   ├── index.js                 # Server startup, env validation, and port binding
 │   └── lib/
 │       ├── opportunities.js     # Read-only Supabase opportunity queries
-│       └── supabase.js          # Public-key configuration
+│       └── supabase.js          # Public-key validation and Supabase client setup
+│
+├── supabase/
+│   └── migrations/              # Candidate profile and saved-opportunity schema policies
 │
 ├── test/
-│   ├── api.test.js              # Database-independent API tests
+│   ├── api.test.js              # API and root-route regression tests
 │   └── theme.test.js            # Theme preference tests
 │
 ├── images/
-│   ├── logo.svg                 # SkillBridge brand logo (Bridge & Pathway motif)
-│   ├── favicon.svg              # Brand browser favicon
-│   └── hero-pathway.svg         # Bespoke career milestone pathway illustration
+│   ├── logo.svg                 # Brand illustration
+│   ├── favicon.svg              # Browser icon
+│   └── hero-pathway.svg         # Hero image asset
 │
-├── package.json                 # Backend dependencies and scripts
-├── package-lock.json            # Locked backend dependencies
-├── supabase/migrations/          # Candidate profile and saved-item RLS policies
-├── .env.example                 # Safe local configuration template
-├── .gitignore                   # Protects local environment secrets
-└── README.md                    # Comprehensive project documentation
+├── package.json                 # Node.js app scripts and dependencies
+├── package-lock.json            # Locked dependency tree
+├── .env.example                 # Example environment configuration
+├── .gitignore                   # Ignores local secrets
+├── .env                         # Local environment secrets (not committed)
+├── README.md                    # Project documentation
+└── LICENSE                      # Project license (if present)
 ```
 
 ---
@@ -222,25 +228,45 @@ The site uses a strict **mobile-first** CSS architecture tested across multiple 
 
 ## 12. How to Run Locally
 
-Because SkillBridge fetches its opportunity dataset via the standard browser `fetch()` API (`data/opportunities.json`), it should be served through a local HTTP server rather than opening `file:///` directly (to prevent browser CORS file restrictions).
+This project is a full-stack Node.js app. Start the server from the project root so both the static frontend and the `/api` routes are available.
 
-### Option 1: Python Built-In HTTP Server (Recommended)
-Open your terminal in the project root directory and run:
-
+### 1) Install dependencies
 ```bash
-# Python 3
-python -m http.server 8000
-```
-Then navigate to: `http://localhost:8000`
-
-### Option 2: Node.js `npx serve`
-```bash
-npx serve .
+npm install
 ```
 
-### Option 3: VS Code Live Server
-1. Install the "Live Server" extension in VS Code.
-2. Right-click `index.html` and select **"Open with Live Server"**.
+### 2) Create your environment file
+Copy the example file and fill in the required values:
+
+```bash
+copy .env.example .env
+```
+
+Then set:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
+PORT=3000
+```
+
+### 3) Run the app
+```bash
+npm run dev
+```
+
+Then open:
+
+```text
+http://localhost:3000
+```
+
+The Express server serves the frontend at `/` and the API under `/api/*`.
+
+### Alternative: production start
+```bash
+npm start
+```
 
 ---
 
@@ -272,26 +298,41 @@ git push -u origin main
 
 ## 14. Deployment Instructions
 
-The existing frontend has no build step and can be deployed to static hosting. This does not deploy the new API: the Stage 2 backend requires a separate Node.js host with its environment variables configured. The frontend is not yet connected to that API.
+This project is ready to deploy as a single Node.js app. The Express server serves both the frontend and the API from the same process, so the root path works correctly on hosts like Render.
 
-### 14.1 Deploying to GitHub Pages
-1. Push your repository to GitHub.
-2. Go to repository **Settings** > **Pages**.
-3. Under **Branch**, select `main` and `/ (root)`.
-4. Click **Save**. Your site will be published at `https://<username>.github.io/SkillBridge/`.
+### 14.1 Deploying to Render
+1. Push this repository to GitHub.
+2. In Render, create a **New** > **Web Service**.
+3. Connect the repository and choose the root folder.
+4. Set the build command to:
 
-### 14.2 Deploying to Netlify
-1. Log in to [Netlify](https://www.netlify.com).
-2. Click **Add new site** > **Import an existing project**.
-3. Select your GitHub repository.
-4. Leave build command blank and publish directory as `.`.
-5. Click **Deploy Site**.
+```bash
+npm install
+```
 
-### 14.3 Deploying to Vercel
-1. Log in to [Vercel](https://vercel.com).
-2. Click **Add New Project** and select your repository.
-3. Keep Framework Preset as **Other**.
-4. Click **Deploy**.
+5. Set the start command to:
+
+```bash
+npm start
+```
+
+6. Add the environment variables in Render:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
+PORT=3000
+```
+
+> Render injects `PORT` automatically in many cases, but the app also accepts the value if you define it explicitly.
+
+The app root is served by Express, so the site loads at `/` and the API remains available under `/api/*`. This also fixes the previous issue where the root route returned `{"error":{"code":"NOT_FOUND","message":"Endpoint not found."}}`.
+
+### 14.2 Deploying to GitHub Pages
+GitHub Pages is suitable only for the static frontend shell if you are hosting the HTML/CSS/JS without the API. This project’s full-stack behavior is designed for Node-based hosting, not purely static hosting.
+
+### 14.3 Deploying to Netlify / Vercel
+The app is not optimized as a pure static site because it depends on the Express API and Supabase auth configuration. These platforms can work only if you configure a Node runtime or a serverless wrapper, which is not the primary deployment target for this repository.
 
 ---
 
@@ -352,10 +393,10 @@ Stage 2 adds an Express API for public reads from the existing Supabase `public.
 
 ```powershell
 npm install
-Copy-Item .env.example .env
+copy .env.example .env
 ```
 
-Edit `.env` and set `SUPABASE_URL` and either `SUPABASE_PUBLISHABLE_KEY` or the legacy public `SUPABASE_ANON_KEY`. `PORT` is optional and defaults to `3000`. Use only a Supabase publishable/anon key; privileged keys are rejected. `.env` is ignored by Git.
+Edit `.env` and set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (or the legacy public `SUPABASE_ANON_KEY`). `PORT` is optional and defaults to `3000`. Use only a Supabase publishable/anon key; privileged keys are rejected. `.env` is ignored by Git.
 
 ### Start and test
 
