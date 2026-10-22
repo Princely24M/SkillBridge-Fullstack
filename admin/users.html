@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Users | SkillBridge</title>
+  <meta name="description" content="Review registered users and account status in the admin area." />
+  <link rel="icon" type="image/svg+xml" href="../images/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body data-admin-page="users">
+  <div class="admin-shell">
+    <aside class="admin-sidebar" aria-label="Admin navigation">
+      <div class="admin-sidebar-header">
+        <a href="../index.html" class="brand-link" aria-label="SkillBridge home"><img src="../images/logo.svg" alt="SkillBridge logo" class="brand-logo-img" /></a>
+        <span class="admin-side-label">Admin</span>
+      </div>
+      <nav class="admin-nav">
+        <a href="dashboard.html">Overview</a>
+        <a href="opportunities.html">Opportunities</a>
+        <a class="active" href="users.html">Users</a>
+        <a href="reports.html">Reports</a>
+        <a href="activity.html">Activity</a>
+        <a href="settings.html">Settings</a>
+      </nav>
+      <div class="admin-sidebar-footer">
+        <button class="btn btn-secondary btn-block" type="button" data-admin-logout>Log out</button>
+      </div>
+    </aside>
+
+    <div class="admin-page">
+      <header class="admin-topbar">
+        <div>
+          <p class="admin-kicker">Users</p>
+          <h1>Account management</h1>
+        </div>
+        <div class="admin-header-actions">
+          <button class="btn btn-secondary" type="button" data-theme-toggle>Theme</button>
+          <span class="admin-status-pill" data-admin-role>Admin</span>
+        </div>
+      </header>
+
+      <main class="admin-content">
+        <section class="admin-panel">
+          <div class="admin-panel-header">
+            <h2>Registered users</h2>
+          </div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody data-admin-users>
+                <tr><td colspan="5">Loading users…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>

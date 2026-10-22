@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log In | SkillBridge</title>
+  <meta name="description" content="Log in to your SkillBridge candidate account.">
+  <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <header class="site-header">
+    <div class="container auth-page-header">
+      <a href="index.html" class="brand-link" aria-label="SkillBridge Home"><img src="images/logo.svg" alt="SkillBridge Logo" class="brand-logo-img"></a>
+      <nav aria-label="Account navigation">
+        <a href="opportunities.html">Browse opportunities</a>
+        <a href="register.html">Create Profile</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main-content" class="auth-page-shell">
+    <div class="container auth-layout">
+      <section class="auth-intro" aria-labelledby="login-heading">
+        <span class="section-badge">Candidate account</span>
+        <h1 id="login-heading">Welcome back</h1>
+        <p>Sign in to update your candidate profile and manage the opportunities you have saved.</p>
+        <ul class="auth-benefits">
+          <li>Your profile details remain private to your account.</li>
+          <li>Pick up where you left off with saved opportunities.</li>
+        </ul>
+      </section>
+      <section class="auth-form-panel" aria-label="Login form">
+        <h2>Log in</h2>
+        <p class="auth-form-intro">Use the email address and password connected to your account.</p>
+        <form id="login-form" novalidate>
+          <div class="auth-message" data-auth-message role="status" aria-live="polite" hidden></div>
+          <div class="form-group">
+            <label class="form-label" for="login-email">Email address</label>
+            <input class="form-control" id="login-email" name="email" type="email" autocomplete="email" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-password">Password</label>
+            <input class="form-control" id="login-password" name="password" type="password" autocomplete="current-password" required>
+          </div>
+          <button class="btn btn-primary btn-block auth-submit" type="submit">Log In</button>
+        </form>
+        <p class="auth-switch">New to SkillBridge? <a href="register.html">Create a profile</a></p>
+      </section>
+    </div>
+  </main>
+  <footer class="auth-footer"><div class="container">&copy; 2026 SkillBridge. Verify opportunities through their official sources.</div></footer>
+  <script src="js/api.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

@@ -17,6 +17,7 @@
 const APP_STATE = {
   opportunities: [],
   datasetMeta: null,
+  pagination: null,
   isLoading: true,
   currentFilter: {
     keyword: '',
@@ -30,6 +31,7 @@ const APP_STATE = {
   savedOpportunities: JSON.parse(localStorage.getItem('skillbridge_saved') || '[]'),
   recentlyViewed: JSON.parse(localStorage.getItem('skillbridge_recent') || '[]')
 };
+let opportunityRefreshSequence = 0;
 
 function normalizeSavedOpportunities() {
   APP_STATE.savedOpportunities = [...new Set(APP_STATE.savedOpportunities.map(String))];
@@ -38,6 +40,37 @@ function normalizeSavedOpportunities() {
 
 // South African Reference Date (Synchronized with 2026 dataset timeline: 2026-10-06)
 const CURRENT_DATE = new Date('2026-10-06T10:00:00');
+
+function getApiBaseUrl() {
+  return window.SkillBridgeAPI.getDefaultBaseUrl();
+}
+
+function getCurrentApiFilters() {
+  const filters = {
+    sort: 'closing_date',
+    page: 1,
+    limit: 40
+  };
+
+  if (APP_STATE.currentFilter.keyword) {
+    filters.q = APP_STATE.currentFilter.keyword;
+  }
+  if (APP_STATE.currentFilter.category && APP_STATE.currentFilter.category !== 'All') {
+    filters.category = APP_STATE.currentFilter.category;
+  }
+  if (APP_STATE.currentFilter.location && APP_STATE.currentFilter.location !== 'All') {
+    filters.location = APP_STATE.currentFilter.location;
+  }
+
+  return filters;
+}
+
+function showApiError(message) {
+  const main = document.querySelector('main');
+  if (main) {
+    showNotificationBanner(message, 'warning');
+  }
+}
 
 const OFFLINE_DEMO_DATA = [
   {
@@ -141,6 +174,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load Opportunity Data
   await loadOpportunities();
+  if (window.SkillBridgeAuth) {
+    await window.SkillBridgeAuth.ready;
+    if (window.SkillBridgeAuth.getSession()) {
+      try {
+        APP_STATE.savedOpportunities = await window.SkillBridgeAuth.loadSavedOpportunityIds();
+      } catch (error) {
+        APP_STATE.savedOpportunities = [];
+        showApiError(`Unable to load your saved opportunities. ${error.message || 'Please try again later.'}`);
+      }
+    }
+  }
   updateBookmarkNavState();
 
   // Page Specific Routines
@@ -172,8 +216,9 @@ function getCurrentPageName() {
    2. Theme & Accessibility Utilities
    ========================================================================== */
 function initTheme() {
-  document.documentElement.setAttribute('data-theme', 'light');
-  localStorage.setItem('skillbridge_theme', 'light');
+  const savedTheme = localStorage.getItem('skillbridge_theme');
+  const preferredTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', savedTheme || preferredTheme);
 }
 
 function initMobileNavigation() {
@@ -220,29 +265,58 @@ function initMobileNavigation() {
    ========================================================================== */
 async function loadOpportunities() {
   try {
-    const response = await fetch('data/opportunities.json', { cache: 'no-store' });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-    if (Array.isArray(data)) {
-      APP_STATE.opportunities = data;
-    } else if (data && Array.isArray(data.opportunities)) {
-      APP_STATE.opportunities = data.opportunities;
-      APP_STATE.datasetMeta = data;
-    } else {
-      APP_STATE.opportunities = OFFLINE_DEMO_DATA;
-    }
-    APP_STATE.isLoading = false;
-  } catch (err) {
-    console.error('Error loading opportunities dataset. Falling back to offline demo data.', err);
-    APP_STATE.opportunities = OFFLINE_DEMO_DATA;
+    const result = await window.SkillBridgeAPI.listOpportunities(getCurrentApiFilters(), {
+      baseUrl: getApiBaseUrl(),
+      fallback: OFFLINE_DEMO_DATA
+    });
+    APP_STATE.opportunities = result.items || [];
+    APP_STATE.pagination = result.pagination || null;
     APP_STATE.datasetMeta = {
-      source: 'offline-demo',
-      note: 'Offline demonstration dataset'
+      source: result.fallback === true ? 'offline-demo' : 'api',
+      note: result.fallback === true ? 'Offline demo dataset' : 'Live Express API dataset'
     };
     APP_STATE.isLoading = false;
-    showNotificationBanner('Notice: Unable to load remote opportunities dataset. Using offline demonstration dataset.', 'warning');
+  } catch (err) {
+    console.error('Error loading opportunities from the API.', err);
+    APP_STATE.opportunities = [];
+    APP_STATE.pagination = null;
+    APP_STATE.datasetMeta = { source: 'api-error', note: 'API request failed' };
+    APP_STATE.isLoading = false;
+    showApiError(`Unable to load opportunities from the API. ${err.message || 'Please try again later.'}`);
+  }
+}
+
+async function refreshOpportunitiesFromApi({ showError = true, onUpdate } = {}) {
+  const requestSequence = ++opportunityRefreshSequence;
+
+  try {
+    const result = await window.SkillBridgeAPI.listAllOpportunities(getCurrentApiFilters(), {
+      baseUrl: getApiBaseUrl(),
+      fallback: OFFLINE_DEMO_DATA
+    });
+    if (requestSequence !== opportunityRefreshSequence) return result;
+
+    APP_STATE.opportunities = result.items || [];
+    APP_STATE.pagination = result.pagination || null;
+    APP_STATE.datasetMeta = {
+      source: result.fallback === true ? 'offline-demo' : 'api',
+      note: result.fallback === true ? 'Offline demo dataset' : 'Live Express API dataset'
+    };
+    APP_STATE.isLoading = false;
+    if (typeof onUpdate === 'function') onUpdate();
+    return result;
+  } catch (err) {
+    if (requestSequence !== opportunityRefreshSequence) return null;
+
+    console.error('Error refreshing opportunities from the API.', err);
+    APP_STATE.opportunities = [];
+    APP_STATE.pagination = null;
+    APP_STATE.isLoading = false;
+    if (showError) {
+      showApiError(`Unable to refresh opportunities. ${err.message || 'Please try again later.'}`);
+    }
+    if (typeof onUpdate === 'function') onUpdate();
+    return null;
   }
 }
 
@@ -401,85 +475,120 @@ function initHomePage() {
     });
   }
 
-  // Render 3 Featured Opportunities in the mockup layout
-  if (featuredContainer && APP_STATE.opportunities.length > 0) {
-    featuredContainer.innerHTML = '';
-    const activeItems = APP_STATE.opportunities
-      .filter(o => !isOpportunityExpired(o) && o.closingDate)
-      .sort((a, b) => new Date(a.closingDate) - new Date(b.closingDate));
-    const toRender = activeItems.slice(0, 3);
+  if (featuredContainer || deadlinesContainer) {
+    const featuredLoad = async () => {
+      try {
+        const result = await window.SkillBridgeAPI.listOpportunities({
+          page: 1,
+          limit: 3,
+          sort: 'closing_date'
+        }, {
+          baseUrl: getApiBaseUrl(),
+          fallback: OFFLINE_DEMO_DATA
+        });
 
-    toRender.forEach(item => {
-      const isVerified = Boolean(item.isVerified || item.verificationStatus === 'verified' || item.isSample === false);
-      const featuredCard = document.createElement('article');
-      featuredCard.className = 'featured-card';
-      featuredCard.innerHTML = `
-        <div class="featured-card-top">
-          <span class="featured-type">${escapeHtml(item.category || 'Opportunity')}</span>
-          ${isVerified ? `
-            <span class="featured-verified">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M20 6L9 17l-5-5"></path>
-              </svg>
-              Verified
-            </span>` : ''}
-        </div>
+        APP_STATE.opportunities = result.items || [];
+        APP_STATE.pagination = result.pagination || null;
 
-        <div class="featured-card-body">
-          <h3><a href="opportunity-details.html?id=${encodeURIComponent(item.id)}">${escapeHtml(item.title)}</a></h3>
-          <div class="featured-org">${escapeHtml(item.organisation)}</div>
-        </div>
+        if (featuredContainer) {
+          featuredContainer.innerHTML = '';
+          const activeItems = APP_STATE.opportunities
+            .filter(o => !isOpportunityExpired(o) && o.closingDate)
+            .sort((a, b) => new Date(a.closingDate) - new Date(b.closingDate));
+          const toRender = activeItems.slice(0, 3);
 
-        <div class="featured-meta-block">
-          <div class="featured-meta-row">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-              <circle cx="12" cy="10" r="3"></circle>
-            </svg>
-            <span>${escapeHtml(item.location || 'South Africa')}</span>
-            <span class="meta-divider">•</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-            </svg>
-            <span>${escapeHtml(item.experienceLevel || 'Varies')}</span>
-          </div>
-        </div>
+          if (!toRender.length) {
+            featuredContainer.innerHTML = '<div class="featured-card placeholder-card">No featured opportunities are currently available.</div>';
+          } else {
+            toRender.forEach(item => {
+              const isVerified = Boolean(item.isVerified || item.verificationStatus === 'verified' || item.isSample === false);
+              const featuredCard = document.createElement('article');
+              featuredCard.className = 'featured-card';
+              featuredCard.innerHTML = `
+                <div class="featured-card-top">
+                  <span class="featured-type">${escapeHtml(item.category || 'Opportunity')}</span>
+                  ${isVerified ? `
+                    <span class="featured-verified">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M20 6L9 17l-5-5"></path>
+                      </svg>
+                      Verified
+                    </span>` : ''}
+                </div>
 
-        <div class="featured-card-footer">
-          <span class="featured-closing">Closes: ${formatDate(item.closingDate)}</span>
-          <a href="opportunity-details.html?id=${encodeURIComponent(item.id)}" class="featured-link">View details <span aria-hidden="true">→</span></a>
-        </div>
-      `;
-      featuredContainer.appendChild(featuredCard);
-    });
-  }
+                <div class="featured-card-body">
+                  <h3><a href="opportunity-details.html?id=${encodeURIComponent(item.id)}">${escapeHtml(item.title)}</a></h3>
+                  <div class="featured-org">${escapeHtml(item.organisation)}</div>
+                </div>
 
-  // Render Upcoming Deadlines in the mockup list format using the real dataset
-  if (deadlinesContainer && APP_STATE.opportunities.length > 0) {
-    deadlinesContainer.innerHTML = '';
-    const activeWithDeadlines = APP_STATE.opportunities
-      .filter(o => !isOpportunityExpired(o) && o.closingDate)
-      .sort((a, b) => new Date(a.closingDate) - new Date(b.closingDate))
-      .slice(0, 4);
+                <div class="featured-meta-block">
+                  <div class="featured-meta-row">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                      <circle cx="12" cy="10" r="3"></circle>
+                    </svg>
+                    <span>${escapeHtml(item.location || 'South Africa')}</span>
+                    <span class="meta-divider">•</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                    </svg>
+                    <span>${escapeHtml(item.experienceLevel || 'Varies')}</span>
+                  </div>
+                </div>
 
-    activeWithDeadlines.forEach(item => {
-      const days = getDaysRemaining(item);
-      const dayText = days === 0 ? 'Today' : (days === 1 ? '1 day left' : `${days} days left`);
-      const dateBadge = (item.closingDate || '').slice(5).replace('-', '/');
+                <div class="featured-card-footer">
+                  <span class="featured-closing">Closes: ${formatDate(item.closingDate)}</span>
+                  <a href="opportunity-details.html?id=${encodeURIComponent(item.id)}" class="featured-link">View details <span aria-hidden="true">→</span></a>
+                </div>
+              `;
+              featuredContainer.appendChild(featuredCard);
+            });
+          }
+        }
 
-      const deadlineCard = document.createElement('div');
-      deadlineCard.className = 'deadline-item';
-      deadlineCard.innerHTML = `
-        <span class="date-pill">${escapeHtml(dateBadge)}</span>
-        <div>
-          <span class="deadline-title">${escapeHtml(item.title)}</span>
-          <span class="deadline-sub">${escapeHtml(item.organisation)}</span>
-        </div>
-        <span class="deadline-arrow" aria-label="${escapeHtml(dayText)}">→</span>
-      `;
-      deadlinesContainer.appendChild(deadlineCard);
-    });
+        if (deadlinesContainer) {
+          deadlinesContainer.innerHTML = '';
+          const activeWithDeadlines = APP_STATE.opportunities
+            .filter(o => !isOpportunityExpired(o) && o.closingDate)
+            .sort((a, b) => new Date(a.closingDate) - new Date(b.closingDate))
+            .slice(0, 4);
+
+          if (!activeWithDeadlines.length) {
+            deadlinesContainer.innerHTML = '<div class="deadline-item placeholder-row">No upcoming deadlines available.</div>';
+          } else {
+            activeWithDeadlines.forEach(item => {
+              const days = getDaysRemaining(item);
+              const dayText = days === 0 ? 'Today' : (days === 1 ? '1 day left' : `${days} days left`);
+              const dateBadge = (item.closingDate || '').slice(5).replace('-', '/');
+
+              const deadlineCard = document.createElement('div');
+              deadlineCard.className = 'deadline-item';
+              deadlineCard.innerHTML = `
+                <span class="date-pill">${escapeHtml(dateBadge)}</span>
+                <div>
+                  <span class="deadline-title">${escapeHtml(item.title)}</span>
+                  <span class="deadline-sub">${escapeHtml(item.organisation)}</span>
+                </div>
+                <span class="deadline-arrow" aria-label="${escapeHtml(dayText)}">→</span>
+              `;
+              deadlinesContainer.appendChild(deadlineCard);
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Home page API load failed.', error);
+        if (featuredContainer) {
+          featuredContainer.innerHTML = '<div class="featured-card placeholder-card">Unable to load featured opportunities. Please try again later.</div>';
+        }
+        if (deadlinesContainer) {
+          deadlinesContainer.innerHTML = '<div class="deadline-item placeholder-row">Unable to load deadlines.</div>';
+        }
+        showApiError(`Unable to load homepage opportunities. ${error.message || 'Please try again later.'}`);
+      }
+    };
+
+    featuredLoad();
   }
 }
 
@@ -500,7 +609,12 @@ function initOpportunitiesPage() {
   const expiredToggle = document.getElementById('toggle-expired');
   const bookmarkedOnlyToggle = document.getElementById('toggle-bookmarked-only');
 
-  window.__skillbridgeApplyFilters = () => applyFiltersAndRender();
+  const refreshListing = (showError = true) => refreshOpportunitiesFromApi({
+    showError,
+    onUpdate: applyFiltersAndRender
+  });
+
+  window.__skillbridgeApplyFilters = () => refreshListing(false);
 
   // Populate dynamic category and location dropdown options from dataset if available
   populateFilterOptions(categorySelect, locationSelect);
@@ -528,21 +642,21 @@ function initOpportunitiesPage() {
   if (searchInput) {
     searchInput.addEventListener('input', debounce(() => {
       APP_STATE.currentFilter.keyword = searchInput.value.trim();
-      applyFiltersAndRender();
-    }, 200));
+      refreshListing(true);
+    }, 250));
   }
 
   if (categorySelect) {
     categorySelect.addEventListener('change', () => {
       APP_STATE.currentFilter.category = categorySelect.value;
-      applyFiltersAndRender();
+      refreshListing(true);
     });
   }
 
   if (locationSelect) {
     locationSelect.addEventListener('change', () => {
       APP_STATE.currentFilter.location = locationSelect.value;
-      applyFiltersAndRender();
+      refreshListing(true);
     });
   }
 
@@ -595,14 +709,14 @@ function initOpportunitiesPage() {
 
     // Clean URL query string
     window.history.replaceState({}, '', window.location.pathname);
-    applyFiltersAndRender();
+    refreshListing(true);
   }
 
   if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', resetFilters);
   if (emptyClearBtn) emptyClearBtn.addEventListener('click', resetFilters);
 
   // Initial render
-  applyFiltersAndRender();
+  refreshListing(true);
 
   function applyFiltersAndRender() {
     if (!gridContainer) return;
@@ -765,17 +879,31 @@ function initOpportunityDetailsPage() {
     return;
   }
 
-  const opportunity = APP_STATE.opportunities.find(o => String(o.id) === String(idParam));
-  if (!opportunity) {
-    showErrorState();
-    return;
-  }
+  const loadOpportunity = async () => {
+    try {
+      const opportunity = await window.SkillBridgeAPI.getOpportunityById(idParam, {
+        baseUrl: getApiBaseUrl()
+      });
 
-  // Track Recently Viewed (max 6)
-  trackRecentlyViewed(opportunity.id);
+      if (!opportunity) {
+        showErrorState();
+        return;
+      }
 
-  // Render Details
-  renderOpportunityDetails(opportunity, container);
+      APP_STATE.opportunities = APP_STATE.opportunities.length
+        ? APP_STATE.opportunities
+        : [opportunity];
+
+      trackRecentlyViewed(opportunity.id);
+      renderOpportunityDetails(opportunity, container);
+    } catch (error) {
+      console.error('Error loading opportunity details from API.', error);
+      showErrorState();
+      showApiError(`Unable to load opportunity details. ${error.message || 'Please try again later.'}`);
+    }
+  };
+
+  loadOpportunity();
 
   function showErrorState() {
     if (container) container.style.display = 'none';
@@ -1035,9 +1163,9 @@ function renderOpportunityDetails(item, container) {
   // Bookmark Toggle in Details
   const saveBtn = container.querySelector('#details-save-btn');
   if (saveBtn) {
-    saveBtn.addEventListener('click', () => {
-      toggleBookmark(item.id, null, item.title);
-      const updatedSaved = APP_STATE.savedOpportunities.includes(String(item.id));
+    saveBtn.addEventListener('click', async () => {
+      saveBtn.disabled = true;
+      const updatedSaved = await toggleBookmark(item.id, null, item.title);
       saveBtn.querySelector('span').textContent = updatedSaved ? 'Saved in Bookmarks' : 'Bookmark Opportunity';
       const svg = saveBtn.querySelector('svg');
       if (updatedSaved) {
@@ -1045,6 +1173,7 @@ function renderOpportunityDetails(item, container) {
       } else {
         svg.setAttribute('fill', 'none');
       }
+      saveBtn.disabled = false;
     });
   }
 
@@ -1224,23 +1353,32 @@ function validateEmail(email) {
 /* ==========================================================================
    10. Bookmarks, LocalStorage & Toast Helpers
    ========================================================================== */
-function toggleBookmark(id, buttonEl, title) {
+async function toggleBookmark(id, buttonEl, title) {
   const strId = String(id);
   const index = APP_STATE.savedOpportunities.indexOf(strId);
-  let isSaved = false;
+  const isSaved = index > -1;
 
-  if (index > -1) {
+  try {
+    if (window.SkillBridgeAuth?.getSession()) {
+      await window.SkillBridgeAuth.setSavedOpportunity(strId, !isSaved);
+    }
+  } catch (error) {
+    showToast(error.message || 'Unable to update your saved opportunities.');
+    return isSaved;
+  }
+
+  if (isSaved) {
     APP_STATE.savedOpportunities.splice(index, 1);
-    isSaved = false;
     showToast(`Removed "${title || 'Opportunity'}" from bookmarks`);
   } else {
     APP_STATE.savedOpportunities.push(strId);
-    isSaved = true;
     showToast(`Saved "${title || 'Opportunity'}" to bookmarks!`);
   }
 
   APP_STATE.savedOpportunities = [...new Set(APP_STATE.savedOpportunities.map(String))];
-  localStorage.setItem('skillbridge_saved', JSON.stringify(APP_STATE.savedOpportunities));
+  if (!window.SkillBridgeAuth?.getSession()) {
+    localStorage.setItem('skillbridge_saved', JSON.stringify(APP_STATE.savedOpportunities));
+  }
   updateBookmarkNavState();
 
   if (buttonEl) {
@@ -1258,6 +1396,8 @@ function toggleBookmark(id, buttonEl, title) {
   if (currentPage === 'opportunities' && typeof window.__skillbridgeApplyFilters === 'function') {
     window.__skillbridgeApplyFilters();
   }
+
+  return !isSaved;
 }
 
 function updateBookmarkNavState() {

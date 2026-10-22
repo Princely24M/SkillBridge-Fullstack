@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Opportunities | SkillBridge</title>
+  <meta name="description" content="Manage incoming and published opportunities from the admin dashboard." />
+  <link rel="icon" type="image/svg+xml" href="../images/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body data-admin-page="opportunities">
+  <div class="admin-shell">
+    <aside class="admin-sidebar" aria-label="Admin navigation">
+      <div class="admin-sidebar-header">
+        <a href="../index.html" class="brand-link" aria-label="SkillBridge home"><img src="../images/logo.svg" alt="SkillBridge logo" class="brand-logo-img" /></a>
+        <span class="admin-side-label">Admin</span>
+      </div>
+      <nav class="admin-nav">
+        <a href="dashboard.html">Overview</a>
+        <a class="active" href="opportunities.html">Opportunities</a>
+        <a href="users.html">Users</a>
+        <a href="reports.html">Reports</a>
+        <a href="activity.html">Activity</a>
+        <a href="settings.html">Settings</a>
+      </nav>
+      <div class="admin-sidebar-footer">
+        <button class="btn btn-secondary btn-block" type="button" data-admin-logout>Log out</button>
+      </div>
+    </aside>
+
+    <div class="admin-page">
+      <header class="admin-topbar">
+        <div>
+          <p class="admin-kicker">Opportunities</p>
+          <h1>Manage listings</h1>
+        </div>
+        <div class="admin-header-actions">
+          <button class="btn btn-secondary" type="button" data-theme-toggle>Theme</button>
+          <span class="admin-status-pill" data-admin-role>Admin</span>
+        </div>
+      </header>
+
+      <main class="admin-content">
+        <section class="admin-panel">
+          <div class="admin-panel-header">
+            <h2>Opportunity management</h2>
+            <button class="btn btn-primary" type="button">Add opportunity</button>
+          </div>
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Organisation</th>
+                  <th>Status</th>
+                  <th>Verification</th>
+                  <th>Closing date</th>
+                </tr>
+              </thead>
+              <tbody data-admin-opportunities>
+                <tr><td colspan="5">Loading opportunities…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>

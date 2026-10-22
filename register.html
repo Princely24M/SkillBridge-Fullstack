@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Profile | SkillBridge</title>
+  <meta name="description" content="Create a SkillBridge candidate profile to save opportunities and manage your details.">
+  <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <header class="site-header">
+    <div class="container auth-page-header">
+      <a href="index.html" class="brand-link" aria-label="SkillBridge Home"><img src="images/logo.svg" alt="SkillBridge Logo" class="brand-logo-img"></a>
+      <nav aria-label="Account navigation">
+        <a href="opportunities.html">Browse opportunities</a>
+        <a href="login.html" data-auth-link>Log in</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main-content" class="auth-page-shell">
+    <div class="container auth-layout">
+      <section class="auth-intro" aria-labelledby="register-heading">
+        <span class="section-badge">Candidate account</span>
+        <h1 id="register-heading">Create your SkillBridge profile</h1>
+        <p>Save opportunities and keep your candidate details in one place.</p>
+        <ul class="auth-benefits">
+          <li>Keep track of opportunities you want to revisit.</li>
+          <li>Update your profile details whenever they change.</li>
+          <li>Your profile and saved items are private to your account.</li>
+        </ul>
+      </section>
+      <section class="auth-form-panel" aria-label="Registration form">
+        <h2>Register</h2>
+        <p class="auth-form-intro">Use an email address you can access. We may ask you to verify it before login.</p>
+        <form id="register-form" novalidate>
+          <div class="auth-message" data-auth-message role="status" aria-live="polite" hidden></div>
+          <div class="form-group">
+            <label class="form-label" for="register-full-name">Full name</label>
+            <input class="form-control" id="register-full-name" name="fullName" type="text" autocomplete="name" maxlength="160" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="register-email">Email address</label>
+            <input class="form-control" id="register-email" name="email" type="email" autocomplete="email" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="register-password">Password</label>
+            <input class="form-control" id="register-password" name="password" type="password" autocomplete="new-password" minlength="8" required aria-describedby="password-help">
+            <small id="password-help" class="auth-help-text">Use at least 8 characters.</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="register-confirm-password">Confirm password</label>
+            <input class="form-control" id="register-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
+          </div>
+          <button class="btn btn-primary btn-block auth-submit" type="submit">Create Profile</button>
+        </form>
+        <p class="auth-switch">Already registered? <a href="login.html">Log in</a></p>
+      </section>
+    </div>
+  </main>
+  <footer class="auth-footer"><div class="container">&copy; 2026 SkillBridge. Verify opportunities through their official sources.</div></footer>
+  <script src="js/api.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

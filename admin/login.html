@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Login | SkillBridge</title>
+  <meta name="description" content="Sign in to the SkillBridge admin dashboard." />
+  <link rel="icon" type="image/svg+xml" href="../images/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body class="admin-auth-body">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <main id="main-content" class="admin-auth-shell">
+    <div class="container admin-auth-layout">
+      <section class="auth-intro admin-auth-intro" aria-labelledby="admin-login-heading">
+        <span class="section-badge">Secure admin access</span>
+        <h1 id="admin-login-heading">SkillBridge administration</h1>
+        <p>Review opportunities, manage candidates, and monitor platform activity with a verified administrator account.</p>
+        <ul class="auth-benefits">
+          <li>Role-based access is enforced on the server.</li>
+          <li>Candidate accounts remain isolated from admin data.</li>
+          <li>Privileged actions are protected by Supabase session checks.</li>
+        </ul>
+      </section>
+
+      <section class="auth-form-panel admin-auth-panel" aria-label="Admin login form">
+        <h2>Admin sign in</h2>
+        <p class="auth-form-intro">Use an authorised administrator account to continue.</p>
+        <form id="admin-login-form" novalidate>
+          <div class="auth-message" data-auth-message role="status" aria-live="polite" hidden></div>
+
+          <div class="form-group">
+            <label class="form-label" for="admin-email">Email address</label>
+            <input class="form-control" id="admin-email" name="email" type="email" autocomplete="email" required />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="admin-password">Password</label>
+            <input class="form-control" id="admin-password" name="password" type="password" autocomplete="current-password" required />
+          </div>
+
+          <button class="btn btn-primary btn-block auth-submit" type="submit">Sign in to dashboard</button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <footer class="auth-footer"><div class="container">&copy; 2026 SkillBridge. Access is limited to authorised administrators.</div></footer>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>

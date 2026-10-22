@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Candidate Dashboard | SkillBridge</title>
+  <meta name="description" content="Manage your SkillBridge profile and saved opportunities.">
+  <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="js/theme.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <header class="site-header candidate-site-header">
+    <div class="container candidate-header-main">
+      <a href="index.html" class="brand-link" aria-label="SkillBridge Home"><img src="images/logo.svg" alt="SkillBridge Logo" class="brand-logo-img"></a>
+      <div class="candidate-header-tools">
+        <button class="btn btn-outline btn-sm theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark theme">Dark mode</button>
+        <span class="candidate-avatar" data-candidate-avatar aria-hidden="true">C</span>
+        <details class="candidate-account-menu">
+          <summary aria-label="Open account menu"><span data-candidate-name>Candidate</span><span class="account-chevron" aria-hidden="true">&#9662;</span></summary>
+          <div class="candidate-account-dropdown">
+            <a href="#profile-section">My profile</a>
+            <button type="button" data-auth-logout>Log out</button>
+          </div>
+        </details>
+      </div>
+    </div>
+    <nav class="candidate-nav" aria-label="Candidate navigation">
+      <div class="container candidate-nav-inner">
+        <a href="#dashboard-top" aria-current="page">Dashboard</a>
+        <a href="opportunities.html">Browse opportunities</a>
+        <a href="#saved-section">Saved opportunities <span class="candidate-nav-count" data-saved-nav-count>0</span></a>
+        <a href="#profile-section">My profile</a>
+      </div>
+    </nav>
+  </header>
+  <main id="main-content" class="candidate-dashboard">
+    <div class="container candidate-dashboard-inner">
+      <section class="candidate-welcome" id="dashboard-top" aria-labelledby="dashboard-heading">
+        <div>
+          <span class="section-badge">Candidate dashboard</span>
+          <h1 id="dashboard-heading"><span data-greeting>Welcome</span>, <span data-welcome-name>Candidate</span></h1>
+          <p>Keep your next move in sight. Explore verified listings, revisit saved opportunities, and keep your profile details current.</p>
+        </div>
+        <a class="btn btn-primary" href="opportunities.html">Explore Opportunities <span aria-hidden="true">&#8594;</span></a>
+      </section>
+
+      <section class="candidate-overview" aria-label="Your overview">
+        <article class="candidate-stat">
+          <span class="candidate-stat-label">Saved opportunities</span>
+          <strong data-saved-count>--</strong>
+          <a href="#saved-section">View saved list</a>
+        </article>
+        <article class="candidate-stat">
+          <span class="candidate-stat-label">Verified opportunities</span>
+          <strong data-live-opportunity-count>--</strong>
+          <a href="opportunities.html">Browse current listings</a>
+        </article>
+        <article class="candidate-stat">
+          <span class="candidate-stat-label">Recently viewed</span>
+          <strong data-recent-count>0</strong>
+          <a href="#recent-section">On this device</a>
+        </article>
+        <article class="candidate-stat candidate-profile-stat">
+          <div class="candidate-stat-topline">
+            <span class="candidate-stat-label">Profile basics</span>
+            <strong data-profile-completion>--</strong>
+          </div>
+          <div class="candidate-progress-track" role="progressbar" aria-label="Profile basics completion" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-profile-progress>
+            <span></span>
+          </div>
+          <a href="#profile-section">Review your details</a>
+        </article>
+      </section>
+
+      <section class="candidate-section" id="saved-section" aria-labelledby="saved-heading">
+        <div class="candidate-section-heading">
+          <div>
+            <span class="candidate-eyebrow">Your shortlist</span>
+            <h2 id="saved-heading">Saved opportunities</h2>
+            <p>Keep track of roles and programmes you want to revisit.</p>
+          </div>
+          <a href="opportunities.html" class="candidate-text-link">Find more <span aria-hidden="true">&#8594;</span></a>
+        </div>
+        <div class="candidate-opportunity-grid" id="saved-opportunities" aria-live="polite" aria-busy="true">
+          <div class="candidate-loading-row" aria-hidden="true"><span></span><span></span></div>
+        </div>
+        <p class="candidate-feedback" data-dashboard-feedback role="status" aria-live="polite" hidden></p>
+      </section>
+
+      <section class="candidate-section" id="recent-section" aria-labelledby="recent-heading">
+        <div class="candidate-section-heading">
+          <div>
+            <span class="candidate-eyebrow">This device</span>
+            <h2 id="recent-heading">Recently viewed</h2>
+            <p>Opportunities you opened on this browser. This history is stored locally on this device.</p>
+          </div>
+        </div>
+        <div class="candidate-opportunity-grid" id="recent-opportunities" aria-live="polite" aria-busy="true">
+          <div class="candidate-loading-row" aria-hidden="true"><span></span><span></span></div>
+        </div>
+      </section>
+
+      <section class="candidate-section candidate-recommendations" aria-labelledby="recommendations-heading">
+        <div class="candidate-section-heading">
+          <div>
+            <span class="candidate-eyebrow">Recently added, verified</span>
+            <h2 id="recommendations-heading">New opportunities</h2>
+            <p>Current listings from verified sources. Recommendations are not personalized yet.</p>
+          </div>
+          <a href="opportunities.html" class="candidate-text-link">Browse all <span aria-hidden="true">&#8594;</span></a>
+        </div>
+        <div class="candidate-opportunity-grid" id="new-opportunities" aria-live="polite" aria-busy="true">
+          <div class="candidate-loading-row" aria-hidden="true"><span></span><span></span></div>
+        </div>
+        <button class="btn btn-outline candidate-retry" type="button" data-retry-opportunities hidden>Try loading again</button>
+      </section>
+
+      <section class="candidate-profile-section" id="profile-section" aria-labelledby="profile-heading">
+        <div class="candidate-section-heading">
+          <div>
+            <span class="candidate-eyebrow">Account details</span>
+            <h2 id="profile-heading">My profile</h2>
+            <p>Only your name can be edited here. Your email is managed by the authentication provider.</p>
+          </div>
+          <span class="candidate-profile-state" data-profile-state>All changes saved</span>
+        </div>
+        <form id="profile-form" class="candidate-profile-form" novalidate>
+          <div class="candidate-form-feedback" data-auth-message role="status" aria-live="polite" hidden></div>
+          <div class="form-group">
+            <label class="form-label" for="profile-full-name">Full name</label>
+            <input class="form-control" id="profile-full-name" name="fullName" type="text" autocomplete="name" maxlength="160" required aria-describedby="profile-name-error">
+            <small class="candidate-field-error" id="profile-name-error" hidden>Please enter your full name.</small>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="profile-email">Email address</label>
+            <input class="form-control" id="profile-email" name="email" type="email" autocomplete="email" readonly aria-readonly="true" aria-describedby="profile-email-help">
+            <small class="auth-help-text" id="profile-email-help">Email changes are managed securely through your sign-in provider.</small>
+          </div>
+          <div class="candidate-form-actions">
+            <button class="btn btn-primary" type="submit" disabled data-profile-save>Save changes</button>
+            <button class="btn btn-outline" type="button" disabled data-profile-cancel>Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+  <footer class="auth-footer"><div class="container">&copy; 2026 SkillBridge. Verify opportunities through their official sources.</div></footer>
+  <script src="js/api.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

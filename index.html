@@ -34,11 +34,8 @@
 
       <!-- Navigation Actions -->
       <div class="nav-actions">
-        <a href="opportunities.html" class="btn btn-primary btn-sm" style="display: none;">
-          Explore Opportunities
-        </a>
-        <a href="opportunities.html" class="btn btn-primary btn-sm" id="nav-desktop-cta">
-          Explore Opportunities
+        <a href="register.html" class="btn btn-primary btn-sm" id="nav-desktop-cta" data-auth-cta>
+          Create Profile
         </a>
 
         <!-- Mobile Menu Hamburger Button -->
@@ -61,7 +58,7 @@
         <a href="contact.html" class="mobile-nav-link">Contact &amp; Report</a>
       </nav>
       <div class="mobile-drawer-cta">
-        <a href="opportunities.html" class="btn btn-secondary btn-block">Explore Opportunities</a>
+        <a href="register.html" class="btn btn-secondary btn-block" data-auth-cta>Create Profile</a>
         <a href="resources.html" class="btn btn-outline btn-block">Career Resources</a>
       </div>
     </div>
@@ -77,7 +74,7 @@
           <p class="hero-tagline">Discover jobs, internships, learnerships, bursaries and skills programmes in one accessible place.</p>
 
           <div class="hero-actions">
-            <a href="opportunities.html" class="btn btn-primary hero-primary-btn">Explore Opportunities <span aria-hidden="true">→</span></a>
+            <a href="register.html" class="btn btn-primary hero-primary-btn" data-auth-cta>Create Profile <span aria-hidden="true">→</span></a>
             <a href="resources.html" class="btn btn-outline hero-secondary-btn">Explore Career Resources</a>
           </div>
 
@@ -127,8 +124,8 @@
         </div>
 
         <div class="centered-action">
-          <a href="opportunities.html" class="btn btn-primary btn-md">
-            Explore Opportunities →
+          <a href="register.html" class="btn btn-primary btn-md" data-auth-cta>
+            Create Profile
           </a>
         </div>
       </div>
@@ -224,7 +221,7 @@
           <p>Create your free profile, save opportunities and build a path that fits what you want to do next.</p>
         </div>
         <div class="cta-banner-actions">
-          <a href="opportunities.html" class="btn btn-light btn-md">Explore Opportunities</a>
+          <a href="register.html" class="btn btn-light btn-md" data-auth-cta>Create Profile</a>
           <a href="resources.html" class="btn btn-outline-light btn-md">Build Your Career</a>
         </div>
       </div>
@@ -287,6 +284,9 @@
   </footer>
 
   <!-- Scripts -->
+  <script src="js/api.js"></script>
   <script src="js/script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/auth.js"></script>
 </body>
 </html>

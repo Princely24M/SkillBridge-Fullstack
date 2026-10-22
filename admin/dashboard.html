@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard | SkillBridge</title>
+  <meta name="description" content="Monitor key SkillBridge metrics and manage platform activity." />
+  <link rel="icon" type="image/svg+xml" href="../images/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body data-admin-page="dashboard">
+  <div class="admin-shell">
+    <aside class="admin-sidebar" aria-label="Admin navigation">
+      <div class="admin-sidebar-header">
+        <a href="../index.html" class="brand-link" aria-label="SkillBridge home"><img src="../images/logo.svg" alt="SkillBridge logo" class="brand-logo-img" /></a>
+        <span class="admin-side-label">Admin</span>
+      </div>
+      <nav class="admin-nav">
+        <a class="active" href="dashboard.html">Overview</a>
+        <a href="opportunities.html">Opportunities</a>
+        <a href="users.html">Users</a>
+        <a href="reports.html">Reports</a>
+        <a href="activity.html">Activity</a>
+        <a href="settings.html">Settings</a>
+      </nav>
+      <div class="admin-sidebar-footer">
+        <button class="btn btn-secondary btn-block" type="button" data-admin-logout>Log out</button>
+      </div>
+    </aside>
+
+    <div class="admin-page">
+      <header class="admin-topbar">
+        <div>
+          <p class="admin-kicker">Overview</p>
+          <h1>Admin dashboard</h1>
+        </div>
+        <div class="admin-header-actions">
+          <button class="btn btn-secondary" type="button" data-theme-toggle>Theme</button>
+          <span class="admin-status-pill" data-admin-role>Admin</span>
+        </div>
+      </header>
+
+      <main class="admin-content" aria-live="polite">
+        <section class="admin-card-grid" data-admin-metrics>
+          <article class="admin-stat-card"><span>Total users</span><strong data-metric="totalUsers">--</strong><small>Registered accounts</small></article>
+          <article class="admin-stat-card"><span>Active candidates</span><strong data-metric="activeCandidates">--</strong><small>Verified active accounts</small></article>
+          <article class="admin-stat-card"><span>Total opportunities</span><strong data-metric="totalOpportunities">--</strong><small>Visible dataset</small></article>
+          <article class="admin-stat-card"><span>Published</span><strong data-metric="publishedOpportunities">--</strong><small>Live listings</small></article>
+          <article class="admin-stat-card"><span>Drafts</span><strong data-metric="draftOpportunities">--</strong><small>Saved but not published</small></article>
+          <article class="admin-stat-card"><span>Expired</span><strong data-metric="expiredOpportunities">--</strong><small>Outdated listings</small></article>
+          <article class="admin-stat-card"><span>Awaiting review</span><strong data-metric="awaitingReview">--</strong><small>Needs verification</small></article>
+        </section>
+
+        <section class="admin-panel">
+          <div class="admin-panel-header">
+            <h2>Platform activity</h2>
+            <span class="admin-panel-meta" data-last-updated>Loading trends</span>
+          </div>
+          <div class="admin-chart-placeholder" data-admin-charts>
+            <div class="chart-block"><span>Registrations</span><strong data-chart-users>--</strong></div>
+            <div class="chart-block"><span>Published opportunities</span><strong data-chart-opportunities>--</strong></div>
+            <div class="chart-block"><span>Audit events</span><strong data-chart-activity>--</strong></div>
+          </div>
+        </section>
+
+        <section class="admin-panel">
+          <div class="admin-panel-header">
+            <h2>Recent activity</h2>
+          </div>
+          <ul class="admin-activity-list" data-admin-activity>
+            <li>Loading recent activity…</li>
+          </ul>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>
