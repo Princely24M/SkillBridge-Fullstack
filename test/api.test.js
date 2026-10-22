@@ -110,6 +110,13 @@ describe('SkillBridge public API', () => {
     });
   });
 
+  it('serves the app shell at the root route', async () => {
+    const response = await running.get('/');
+    assert.equal(response.status, 200);
+    const body = await response.text();
+    assert.match(body, /<html/i);
+  });
+
   it('returns a minimal health response without environment data', async () => {
     const previous = process.env.API_TEST_SECRET;
     process.env.API_TEST_SECRET = secretSentinel;

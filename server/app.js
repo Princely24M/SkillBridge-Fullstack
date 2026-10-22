@@ -1,3 +1,4 @@
+const path = require('node:path');
 const express = require('express');
 const { DataAccessError } = require('./lib/opportunities');
 
@@ -180,8 +181,10 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
   }
 
   const app = express();
+  const staticRoot = path.resolve(__dirname, '..');
   app.disable('x-powered-by');
   app.use(express.json({ limit: '10kb' }));
+  app.use(express.static(staticRoot, { index: 'index.html', redirect: false }));
   app.use((req, res, next) => {
     const origin = req.get('origin');
     if (origin && isLoopbackOrigin(origin)) {
