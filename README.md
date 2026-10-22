@@ -8,7 +8,7 @@ SkillBridge is a modern, mobile-first web platform designed to help young South 
 The project is now a full-stack application: a Node.js + Express API serves data and auth configuration, while the same server also serves the static frontend from the project root. This allows the app to run as a single deployment on platforms like Render without the root route returning the JSON API 404 error.
 
 # Live Demo
-https://princely24m.github.io/SkillBridge-1.0/
+https://skillbridge-fullstack-wcj0.onrender.com/
 
 ---
 
