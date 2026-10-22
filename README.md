@@ -5,7 +5,7 @@
 
 SkillBridge is a modern, mobile-first web platform designed to help young South Africans discover jobs, internships, learnerships, bursaries, courses, and skills programmes in one accessible, trustworthy location.
 
-Built strictly using **HTML5, CSS3, Vanilla JavaScript (ES6+), and JSON**, this project demonstrates strong core frontend engineering fundamentals without reliance on external CSS or JavaScript frameworks.
+The frontend is built with **HTML5, CSS3, Vanilla JavaScript (ES6+), and JSON** to demonstrate core frontend engineering without a frontend framework. Stage 2 adds a separate, read-only Node.js API; the existing pages continue to use the local JSON dataset.
 
 # Live Demo
 https://princely24m.github.io/SkillBridge-1.0/
@@ -31,6 +31,7 @@ https://princely24m.github.io/SkillBridge-1.0/
 15. [Testing & Quality Assurance](#15-testing--quality-assurance)
 16. [Known Limitations](#16-known-limitations)
 17. [Future Improvements](#17-future-improvements)
+18. [Read-Only API Backend](#18-read-only-api-backend)
 
 ---
 
@@ -125,8 +126,9 @@ This application is strictly built with vanilla web technologies to highlight co
 * **Vanilla JavaScript (ES6+):** Async/await `fetch`, DOM manipulation, query string parsing (`URLSearchParams`), `localStorage`, array filters, event delegation.
 * **JSON:** Structured data source representing demonstration opportunities.
 * **Vector Graphics (SVG):** Custom-designed vector logo, favicon, and hero pathway illustration.
+* **Read-only backend (Stage 2):** Node.js, Express, and the Supabase JavaScript client.
 
-> **Zero External Frameworks:** No React, Vue, Angular, Bootstrap, or Tailwind CSS were utilized.
+> **Frontend:** No React, Vue, Angular, Bootstrap, or Tailwind CSS are used. The Stage 2 API is separate from the existing frontend.
 
 ---
 
@@ -136,6 +138,9 @@ This application is strictly built with vanilla web technologies to highlight co
 SkillBridge/
 │
 ├── index.html                   # Home page with hero, categories, featured & deadlines
+├── register.html                # Supabase candidate registration
+├── login.html                   # Supabase candidate login
+├── profile.html                 # Candidate dashboard, profile, and saved opportunities
 ├── opportunities.html           # Directory with live keyword search and multi-filters
 ├── opportunity-details.html     # Dynamic detail view with interactive checklist
 ├── resources.html               # Career preparation guides & scam awareness toolkit
@@ -145,16 +150,34 @@ SkillBridge/
 │   └── style.css                # Master mobile-first design system and theme styles
 │
 ├── js/
-│   └── script.js                # Shared vanilla JavaScript application logic
+│   ├── script.js                # Shared vanilla JavaScript application logic
+│   ├── auth.js                  # Supabase Auth, profile, and saved-opportunity flows
+│   └── theme.js                 # Early-loading, persistent light/dark theme
 │
 ├── data/
-│   └── opportunities.json       # JSON dataset containing 18 demonstration opportunities
+│   └── opportunities.json       # Legacy frontend dataset containing 100 records
+│
+├── server/
+│   ├── app.js                   # Express routes and API error handling
+│   ├── index.js                 # API startup and environment configuration
+│   └── lib/
+│       ├── opportunities.js     # Read-only Supabase opportunity queries
+│       └── supabase.js          # Public-key configuration
+│
+├── test/
+│   ├── api.test.js              # Database-independent API tests
+│   └── theme.test.js            # Theme preference tests
 │
 ├── images/
 │   ├── logo.svg                 # SkillBridge brand logo (Bridge & Pathway motif)
 │   ├── favicon.svg              # Brand browser favicon
 │   └── hero-pathway.svg         # Bespoke career milestone pathway illustration
 │
+├── package.json                 # Backend dependencies and scripts
+├── package-lock.json            # Locked backend dependencies
+├── supabase/migrations/          # Candidate profile and saved-item RLS policies
+├── .env.example                 # Safe local configuration template
+├── .gitignore                   # Protects local environment secrets
 └── README.md                    # Comprehensive project documentation
 ```
 
@@ -162,47 +185,11 @@ SkillBridge/
 
 ## 9. JSON Dataset Explanation
 
-The dataset located at `data/opportunities.json` includes **18 diverse demonstration opportunities** covering South African economic hubs: Cape Town, Johannesburg, Pretoria, Durban, Gqeberha, Polokwane, and Bloemfontein.
+The existing frontend dataset at `data/opportunities.json` contains **100 records** in a top-level `opportunities` array. Its IDs are text values (for example, `skillbridge-001`) and its frontend fields use camelCase, such as `closingDate` and `isVerified`. The JSON file remains the legacy frontend source during Stage 2; the new API reads the existing Supabase table and does not use this file as a fallback.
 
 ### Data Schema
 
-```json
-{
-  "id": 1,
-  "title": "Junior Frontend Web Developer",
-  "organisation": "Apex Digital Innovations (Demo)",
-  "category": "Job",
-  "location": "Cape Town",
-  "closingDate": "2026-10-10",
-  "experienceLevel": "Junior",
-  "description": "Short summary displayed on opportunity cards...",
-  "fullDescription": "Full comprehensive opportunity description...",
-  "eligibility": [
-    "South African citizen or permanent resident",
-    "Completed relevant diploma, degree, or accredited coding bootcamp"
-  ],
-  "qualifications": [
-    "National Senior Certificate (Matric)",
-    "Diploma or Degree in Information Technology"
-  ],
-  "documents": [
-    "Updated Curriculum Vitae (CV)",
-    "Certified copy of South African ID",
-    "Certified copy of Matric certificate"
-  ],
-  "applicationInstructions": "Review the full requirements and submit via our demonstration portal...",
-  "applicationLink": "#demo-application",
-  "organisationDescription": "Apex Digital Innovations is a simulated technology services firm...",
-  "lastUpdated": "2026-09-28",
-  "isSample": true,
-  "stipendOrSalary": "R18,000 - R22,000 / month",
-  "workType": "Hybrid (2 days on-site)",
-  "featured": true
-}
-```
-
-* All records explicitly contain `"isSample": true`.
-* Closing dates cover closing-soon milestones (October 2026), future deadlines (November/December 2026), and historical expired listings (September 2026) for validation of expiration logic.
+Each JSON opportunity uses legacy camelCase fields such as `id`, `title`, `organisation`, `category`, `location`, `closingDate`, `experienceLevel`, `description`, `eligibility`, `requiredDocuments`, `applicationInstructions`, `officialApplicationUrl`, `sourceUrl`, `sourceName`, `lastVerified`, `verificationStatus`, `verificationLevel`, `status`, `isVerified`, and `isSample`. All 100 current records have `isSample: false` and `verificationStatus: "verified"`; 87 are marked active and 13 expired. These records are not queried by the Stage 2 API.
 
 ---
 
@@ -285,7 +272,7 @@ git push -u origin main
 
 ## 14. Deployment Instructions
 
-SkillBridge contains zero server dependencies or build steps, making it instantly deployable on static hosting providers:
+The existing frontend has no build step and can be deployed to static hosting. This does not deploy the new API: the Stage 2 backend requires a separate Node.js host with its environment variables configured. The frontend is not yet connected to that API.
 
 ### 14.1 Deploying to GitHub Pages
 1. Push your repository to GitHub.
@@ -351,6 +338,58 @@ The application underwent rigorous manual and automated test suites:
 * **Offline PWA Support:** Add a service worker and web manifest to enable full offline access in low-bandwidth areas.
 * **CV Builder Tool:** An interactive browser tool allowing youth to fill in their details and generate a downloadable PDF CV.
 * **Multi-language Support:** Add interface translations in isiZulu, Sesotho, and Afrikaans to expand accessibility across South Africa.
+
+---
+
+## 18. Read-Only API Backend
+
+Stage 2 adds an Express API for public reads from the existing Supabase `public.opportunities` table. The API is separate from the current frontend, which continues to load `data/opportunities.json`.
+
+### Requirements and setup
+
+- Node.js **20.6 or later** and npm.
+- Install dependencies from the project root:
+
+```powershell
+npm install
+Copy-Item .env.example .env
+```
+
+Edit `.env` and set `SUPABASE_URL` and either `SUPABASE_PUBLISHABLE_KEY` or the legacy public `SUPABASE_ANON_KEY`. `PORT` is optional and defaults to `3000`. Use only a Supabase publishable/anon key; privileged keys are rejected. `.env` is ignored by Git.
+
+### Start and test
+
+```powershell
+npm run dev
+```
+
+For a production start, use `npm start` after setting the same environment variables in the Node.js host. Run the database-independent API tests with:
+
+```powershell
+npm test
+```
+
+### Endpoints
+
+- `GET /api/health` — liveness response: `{ "ok": true, "service": "skillbridge-api" }`.
+- `GET /api/opportunities?q=developer&category=Job&location=Johannesburg&page=1&limit=20&sort=closing_date` — paginated list with `{ "items": [], "pagination": { "page": 1, "limit": 20, "total": 0, "totalPages": 0 } }`. `q` searches title, organisation, description, and location; category is an exact filter; location is a case-insensitive partial filter. `page` must be positive, `limit` is 1–100, and `sort` is `closing_date` or `newest`.
+- `GET /api/opportunities/skillbridge-106` — one opportunity by its text ID, returned as `{ "item": { ... } }`.
+
+Successful reads return `200`; invalid query/ID input returns `400`; an unknown or ineligible ID returns `404`; unexpected failures return a sanitized `500` JSON error. List results include only active, verified, non-sample opportunities with `verification_status = 'verified'`. Supabase RLS remains enabled and authoritative, including its current-date deadline rule: null deadlines remain eligible and expired records are excluded. The API applies the same status/verification checks and narrows results to `verification_status = 'verified'`; the supplied RLS eligibility description does not list that verification-status check, so API access is intentionally stricter. No policy changes are made.
+
+To keep keyword matching and totals accurate without constructing a raw PostgREST `or` expression from user input, the API reads eligible matches for each searchable field, deduplicates them by ID, then sorts and paginates in memory. This is appropriate for the current directory but may need a database-supported search strategy if the public dataset grows substantially.
+
+This stage is read-only: it does not change the Supabase schema or any opportunity records. Tests use injected/mock data access and do not connect to Supabase.
+
+### Candidate authentication and authorization
+
+Registration and login use the Supabase browser client with persisted, automatically refreshed Supabase sessions. The browser receives only the publishable/anon key through `GET /api/auth-config`; never expose a service-role key. Configure the API's `SUPABASE_URL` and public key in `.env`, and set the Supabase Auth Site URL and allowed redirect URLs for the local or deployed site. Email confirmation follows the Supabase project's Auth settings.
+
+Apply `supabase/migrations/20261020140000_candidate_profiles_and_saved_opportunities.sql` before using candidate accounts. Supabase Auth creates the identity; an `auth.users` database trigger creates the candidate profile from validated user metadata, with a fallback name. Passwords are handled only by Supabase Auth and are never copied into application tables. The profile table has no client insert grant, and its row-level security policies allow a candidate to read and update only their own profile. Saved opportunities have equivalent owner-only select, insert, and delete policies. The profile page also filters by the active user ID, but database RLS is the authorization boundary.
+
+After login, candidates land on a dashboard with the saved count and list, current verified opportunity count, recently added listings, device-local recently viewed items, and editable profile basics. The recent-history list remains on the current browser/device and is not synced to the account. Application tracking, personalized recommendations, and notification preferences are not implemented and are not presented as available features. The dashboard theme follows the operating-system preference by default and persists a candidate's explicit light/dark choice.
+
+Published opportunity browsing remains public. This project does not implement administrator or opportunity-manager roles, private enquiries, or public role assignment. Privileged opportunity changes are not granted to candidates; any future elevated role must be assigned through a trusted administrative process and enforced in database policies or a validated backend.
 
 ---
 
