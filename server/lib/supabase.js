@@ -59,4 +59,19 @@ function createSupabaseClient(env = process.env) {
   });
 }
 
-module.exports = { createSupabaseClient, readSupabaseConfig };
+function createAdminSupabaseClient(env = process.env) {
+  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY?.trim() || env.SUPABASE_SERVICE_ROLE?.trim();
+  if (!serviceRoleKey) {
+    return null;
+  }
+
+  const { url } = readSupabaseConfig(env);
+  return createClient(url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+}
+
+module.exports = { createSupabaseClient, createAdminSupabaseClient, readSupabaseConfig };

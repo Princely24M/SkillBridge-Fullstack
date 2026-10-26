@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../css/style.css" />
 </head>
-<body data-admin-page="dashboard">
+<body data-admin-page="settings">
   <div class="admin-shell">
     <aside class="admin-sidebar" aria-label="Admin navigation">
       <div class="admin-sidebar-header">
@@ -44,11 +44,16 @@
       <main class="admin-content">
         <section class="admin-panel">
           <div class="admin-panel-header">
-            <h2>Site settings</h2>
+            <h2>Admin profile</h2>
           </div>
-          <ul class="admin-activity-list">
-            <li>Configuration values and governance controls are shown here once a production settings model is connected.</li>
-          </ul>
+          <form id="admin-settings-form" class="admin-settings-form">
+            <div class="admin-form-row">
+              <label for="admin-full-name">Full name</label>
+              <input id="admin-full-name" name="full_name" type="text" placeholder="Your full name" required />
+            </div>
+            <button class="btn btn-primary" type="submit">Save profile</button>
+            <p id="admin-settings-message" class="admin-form-message" aria-live="polite"></p>
+          </form>
         </section>
       </main>
     </div>

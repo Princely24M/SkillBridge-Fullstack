@@ -117,6 +117,17 @@ describe('SkillBridge public API', () => {
     assert.match(body, /<html/i);
   });
 
+  it('returns a minimal root API response', async () => {
+    const response = await running.get('/api');
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.deepEqual(body, {
+      ok: true,
+      service: 'skillbridge-api',
+      endpoints: ['/api/health', '/api/opportunities', '/api/opportunities/:id']
+    });
+  });
+
   it('returns a minimal health response without environment data', async () => {
     const previous = process.env.API_TEST_SECRET;
     process.env.API_TEST_SECRET = secretSentinel;
@@ -231,8 +242,26 @@ describe('SkillBridge public API', () => {
 
     assert.equal(response.status, 204);
     assert.equal(response.headers.get('access-control-allow-origin'), origin);
-    assert.equal(response.headers.get('access-control-allow-methods'), 'GET, OPTIONS');
+    assert.equal(response.headers.get('access-control-allow-methods'), 'GET, POST, PATCH, DELETE, OPTIONS');
     assert.match(response.headers.get('access-control-allow-headers'), /authorization/i);
+  });
+
+  it('allows loopback admin mutation requests to pass the mutation preflight', async () => {
+    const origin = 'http://localhost:5500';
+    for (const method of ['POST', 'PATCH', 'DELETE']) {
+      const response = await running.get('/api/admin/opportunities', {
+        method: 'OPTIONS',
+        headers: {
+          Origin: origin,
+          'Access-Control-Request-Method': method,
+          'Access-Control-Request-Headers': 'authorization, content-type'
+        }
+      });
+
+      assert.equal(response.status, 204);
+      assert.equal(response.headers.get('access-control-allow-origin'), origin);
+      assert.match(response.headers.get('access-control-allow-methods'), new RegExp(method, 'i'));
+    }
   });
 
   it('does not grant cross-origin access to non-loopback origins', async () => {
@@ -584,6 +613,24 @@ describe('Admin route protection', () => {
   });
 
   it('blocks candidate roles from admin metrics and allows admins through', async () => {
+    const adminUsersClient = {
+      auth: {
+        admin: {
+          async listUsers() {
+            return {
+              data: {
+                users: [
+                  { id: 'user-1', email: 'candidate@example.com', app_metadata: { role: 'candidate' }, user_metadata: { full_name: 'Candidate User' }, created_at: '2026-01-01T00:00:00Z' },
+                  { id: 'user-2', email: 'admin@example.com', app_metadata: { role: 'admin' }, user_metadata: { full_name: 'Admin User' }, created_at: '2026-01-02T00:00:00Z' }
+                ]
+              },
+              error: null
+            };
+          }
+        }
+      }
+    };
+
     const appWithCandidate = createApp({
       opportunities: createFixtureRepository([]).repository,
       authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
@@ -592,7 +639,8 @@ describe('Admin route protection', () => {
     const appWithAdmin = createApp({
       opportunities: createFixtureRepository([makeOpportunity()]).repository,
       authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
-      supabaseClient: createAuthClient('admin')
+      supabaseClient: createAuthClient('admin'),
+      adminClient: adminUsersClient
     });
     const appWithSelfDeclaredAdmin = createApp({
       opportunities: createFixtureRepository([]).repository,
@@ -622,6 +670,7 @@ describe('Admin route protection', () => {
       assert.equal(adminResult.status, 200);
       const body = await adminResult.json();
       assert.ok(body.metrics.totalOpportunities >= 1);
+      assert.equal(body.metrics.totalUsers, 2);
       assert.equal(body.user.role, 'admin');
 
       const selfDeclaredAdminResult = await fetch(`http://127.0.0.1:${selfDeclaredAdminServer.address().port}/api/admin/metrics`, {
@@ -634,6 +683,300 @@ describe('Admin route protection', () => {
         new Promise((resolve, reject) => adminServer.close((error) => error ? reject(error) : resolve())),
         new Promise((resolve, reject) => selfDeclaredAdminServer.close((error) => error ? reject(error) : resolve()))
       ]);
+    }
+  });
+
+  it('lists users and lets an admin update a user role', async () => {
+    const adminClient = {
+      auth: {
+        admin: {
+          async listUsers() {
+            return {
+              data: {
+                users: [
+                  {
+                    id: 'user-1',
+                    email: 'candidate@example.com',
+                    app_metadata: { role: 'candidate' },
+                    user_metadata: { full_name: 'Candidate User' },
+                    created_at: '2026-01-01T00:00:00Z'
+                  },
+                  {
+                    id: 'admin-1',
+                    email: 'admin@example.com',
+                    app_metadata: { role: 'admin' },
+                    user_metadata: { full_name: 'Admin User' },
+                    created_at: '2026-01-02T00:00:00Z'
+                  }
+                ]
+              },
+              error: null
+            };
+          },
+          async updateUserById(userId, update) {
+            return {
+              data: {
+                user: {
+                  id: userId,
+                  email: 'candidate@example.com',
+                  app_metadata: update.app_metadata,
+                  user_metadata: { full_name: 'Candidate User' },
+                  created_at: '2026-01-01T00:00:00Z'
+                }
+              },
+              error: null
+            };
+          }
+        }
+      }
+    };
+
+    const app = createApp({
+      opportunities: createFixtureRepository([]).repository,
+      authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
+      supabaseClient: createAuthClient('admin'),
+      adminClient
+    });
+
+    const server = app.listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+
+    try {
+      const usersResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users`, {
+        headers: { Authorization: 'Bearer token' }
+      });
+      assert.equal(usersResponse.status, 200);
+      const users = await usersResponse.json();
+      assert.equal(users.users.length, 2);
+      assert.equal(users.users[0].role, 'candidate');
+
+      const updateResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users/user-1/role`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: 'Bearer token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ role: 'admin' })
+      });
+      assert.equal(updateResponse.status, 200);
+      const updated = await updateResponse.json();
+      assert.equal(updated.user.role, 'admin');
+    } finally {
+      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('allows an admin to create opportunities, update them, delete them, and update their own profile', async () => {
+    const adminClient = {
+      auth: {
+        admin: {
+          async updateUserById(userId, update) {
+            return {
+              data: {
+                user: {
+                  id: userId,
+                  email: 'admin@example.com',
+                  app_metadata: { role: 'admin' },
+                  user_metadata: { full_name: update.user_metadata?.full_name || 'Admin User' },
+                  created_at: '2026-01-02T00:00:00Z'
+                }
+              },
+              error: null
+            };
+          }
+        }
+      },
+      from(table) {
+        if (table === 'opportunities') {
+          return {
+            select() {
+              return {
+                eq(column, value) {
+                  if (column === 'id' && value === 'skillbridge-new') {
+                    return {
+                      maybeSingle() {
+                        return Promise.resolve({
+                          data: {
+                            id: 'skillbridge-new',
+                            title: 'Data Analyst',
+                            organisation: 'SkillBridge',
+                            category: 'Job',
+                            location: 'Cape Town',
+                            status: 'active',
+                            is_verified: true,
+                            verification_status: 'verified'
+                          },
+                          error: null
+                        });
+                      }
+                    };
+                  }
+                  return {
+                    maybeSingle() {
+                      return Promise.resolve({ data: null, error: null });
+                    }
+                  };
+                }
+              };
+            },
+            insert(payload) {
+              return {
+                select() {
+                  return {
+                    single() {
+                      return Promise.resolve({
+                        data: {
+                          id: 'skillbridge-new',
+                          ...payload,
+                          created_at: '2026-01-03T00:00:00Z',
+                          updated_at: '2026-01-03T00:00:00Z'
+                        },
+                        error: null
+                      });
+                    }
+                  };
+                }
+              };
+            },
+            update(payload) {
+              return {
+                eq(column, value) {
+                  if (column === 'id' && value === 'skillbridge-new') {
+                    return {
+                      select() {
+                        return {
+                          single() {
+                            return Promise.resolve({
+                              data: {
+                                id: 'skillbridge-new',
+                                title: payload.title,
+                                organisation: payload.organisation,
+                                category: payload.category,
+                                location: payload.location,
+                                status: payload.status,
+                                updated_at: '2026-01-04T00:00:00Z'
+                              },
+                              error: null
+                            });
+                          }
+                        };
+                      }
+                    };
+                  }
+                  return this;
+                }
+              };
+            },
+            delete() {
+              return {
+                eq(column, value) {
+                  if (column === 'id' && value === 'skillbridge-new') {
+                    return {
+                      select() {
+                        return {
+                          single() {
+                            return Promise.resolve({
+                              data: { id: 'skillbridge-new', deleted: true },
+                              error: null
+                            });
+                          }
+                        };
+                      }
+                    };
+                  }
+                  return this;
+                }
+              };
+            }
+          };
+        }
+        return {
+          select() { return this; },
+          eq() { return this; },
+          maybeSingle() { return Promise.resolve({ data: null, error: null }); }
+        };
+      }
+    };
+
+    const app = createApp({
+      opportunities: createFixtureRepository([]).repository,
+      authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
+      supabaseClient: createAuthClient('admin'),
+      adminClient
+    });
+
+    const server = app.listen(0);
+    await new Promise((resolve) => server.once('listening', resolve));
+
+    try {
+      const createResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/opportunities`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: 'Data Analyst',
+          organisation: 'SkillBridge',
+          category: 'Job',
+          location: 'Cape Town',
+          closing_date: '2030-12-31',
+          experience_level: 'Mid',
+          description: 'Analyst role',
+          status: 'active',
+          is_verified: true,
+          is_sample: false,
+          verification_status: 'verified'
+        })
+      });
+      assert.equal(createResponse.status, 200);
+      const created = await createResponse.json();
+      assert.equal(created.opportunity.title, 'Data Analyst');
+
+      const updateResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/opportunities/skillbridge-new`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: 'Bearer token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: 'Senior Data Analyst',
+          organisation: 'SkillBridge',
+          category: 'Job',
+          location: 'Cape Town',
+          closing_date: '2031-12-31',
+          experience_level: 'Senior',
+          description: 'Updated analyst role',
+          status: 'active',
+          is_verified: true,
+          verification_status: 'verified'
+        })
+      });
+      assert.equal(updateResponse.status, 200);
+      const updated = await updateResponse.json();
+      assert.equal(updated.opportunity.title, 'Senior Data Analyst');
+
+      const deleteResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/opportunities/skillbridge-new`, {
+        method: 'DELETE',
+        headers: { Authorization: 'Bearer token' }
+      });
+      assert.equal(deleteResponse.status, 200);
+      const removed = await deleteResponse.json();
+      assert.equal(removed.deleted.id, 'skillbridge-new');
+
+      const profileResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/profile`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: 'Bearer token',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ full_name: 'Updated Admin User' })
+      });
+      assert.equal(profileResponse.status, 200);
+      const profile = await profileResponse.json();
+      assert.equal(profile.user.full_name, 'Updated Admin User');
+    } finally {
+      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
   });
 });

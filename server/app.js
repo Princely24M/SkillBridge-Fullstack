@@ -124,6 +124,40 @@ function normalizeRole(value) {
   return ['candidate', 'admin', 'super_admin'].includes(normalized) ? normalized : 'candidate';
 }
 
+function normalizeAdminUser(user) {
+  if (!user || typeof user !== 'object') {
+    return {
+      id: '',
+      full_name: 'User',
+      email: '',
+      role: 'candidate',
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+  }
+
+  return {
+    id: user.id || '',
+    full_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+    email: user.email || '',
+    role: normalizeRole(user.app_metadata?.role || user.role || 'candidate'),
+    status: user.status || 'active',
+    created_at: user.created_at || new Date().toISOString()
+  };
+}
+
+function getAdminClient(supabaseClient, adminClient) {
+  if (adminClient && adminClient.auth && adminClient.auth.admin) {
+    return adminClient;
+  }
+
+  if (supabaseClient && supabaseClient.auth && supabaseClient.auth.admin) {
+    return supabaseClient;
+  }
+
+  return null;
+}
+
 function setBearerToken(req) {
   const header = req.get('authorization');
   if (!header) return null;
@@ -166,6 +200,7 @@ function summarizeOpportunityMetrics(items) {
   const awaitingReview = normalized.filter((item) => item.verification_status === 'needs_review' || item.verification_status === 'pending').length;
 
   return {
+    totalUsers: 0,
     totalOpportunities,
     activeCandidateAccounts: 0,
     publishedOpportunities,
@@ -175,7 +210,41 @@ function summarizeOpportunityMetrics(items) {
   };
 }
 
-function createApp({ opportunities, logger = console, authConfig = null, supabaseClient = null }) {
+function buildOpportunityPayload(body = {}, fallbackId = undefined) {
+  const nextId = typeof body?.id === 'string' && body.id.trim() ? body.id.trim() : fallbackId || `skillbridge-${Date.now()}`;
+  const title = String(body?.title || '').trim();
+  const organisation = String(body?.organisation || '').trim();
+  const category = String(body?.category || '').trim();
+  const location = String(body?.location || '').trim();
+
+  return {
+    id: nextId,
+    title,
+    organisation,
+    category,
+    location,
+    closing_date: body?.closing_date || null,
+    experience_level: String(body?.experience_level || 'Varies').trim() || 'Varies',
+    description: String(body?.description || '').trim(),
+    eligibility: Array.isArray(body?.eligibility) ? body.eligibility : [],
+    required_documents: Array.isArray(body?.required_documents) ? body.required_documents : [],
+    application_instructions: String(body?.application_instructions || '').trim(),
+    official_application_url: String(body?.official_application_url || '').trim(),
+    source_url: String(body?.source_url || '').trim(),
+    source_name: String(body?.source_name || '').trim() || organisation,
+    status: ['draft', 'active', 'expired', 'pending'].includes(String(body?.status || 'draft').trim()) ? String(body.status).trim() : 'draft',
+    verification_status: ['verified', 'pending', 'needs_review'].includes(String(body?.verification_status || 'pending').trim()) ? String(body.verification_status).trim() : 'pending',
+    verification_level: String(body?.verification_level || 'manual').trim() || 'manual',
+    is_verified: Boolean(body?.is_verified ?? false),
+    is_sample: Boolean(body?.is_sample ?? false),
+    last_verified_at: body?.last_verified_at || new Date().toISOString(),
+    imported_at: body?.imported_at || new Date().toISOString(),
+    created_at: body?.created_at || new Date().toISOString(),
+    updated_at: body?.updated_at || new Date().toISOString()
+  };
+}
+
+function createApp({ opportunities, logger = console, authConfig = null, supabaseClient = null, adminClient = null }) {
   if (!opportunities || typeof opportunities.list !== 'function' || typeof opportunities.getById !== 'function') {
     throw new TypeError('An opportunity repository with list and getById methods is required.');
   }
@@ -191,14 +260,22 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
       res.set('Access-Control-Allow-Origin', origin);
       res.vary('Origin');
       if (req.method === 'OPTIONS') {
-        res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.set('Access-Control-Allow-Headers', 'Accept, Authorization, Content-Type');
+        res.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+        res.set('Access-Control-Allow-Headers', 'Accept, Authorization, Content-Type, X-Requested-With');
         res.vary('Access-Control-Request-Method');
         res.vary('Access-Control-Request-Headers');
         return res.sendStatus(204);
       }
     }
     next();
+  });
+
+  app.get('/api', (req, res) => {
+    res.json({
+      ok: true,
+      service: 'skillbridge-api',
+      endpoints: ['/api/health', '/api/opportunities', '/api/opportunities/:id']
+    });
   });
 
   app.get('/api/health', (req, res) => {
@@ -253,7 +330,18 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
   app.get('/api/admin/metrics', requireAdmin, async (req, res) => {
     const items = await opportunities.list({ limit: 1000, page: 1, sort: 'newest' });
     const metrics = summarizeOpportunityMetrics(items);
-    metrics.activeCandidateAccounts = 0;
+
+    const admin = getAdminClient(supabaseClient, adminClient);
+    let totalUsers = 0;
+    if (admin && typeof admin.auth?.admin?.listUsers === 'function') {
+      const { data, error } = await admin.auth.admin.listUsers();
+      if (!error && Array.isArray(data?.users)) {
+        totalUsers = data.users.length;
+      }
+    }
+
+    metrics.totalUsers = totalUsers;
+    metrics.activeCandidateAccounts = totalUsers;
 
     res.json({
       user: {
@@ -281,16 +369,264 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
   });
 
   app.get('/api/admin/users', requireAdmin, async (req, res) => {
-    const profile = {
-      id: req.authUser.id,
-      full_name: req.authUser.user_metadata?.full_name || req.authUser.email?.split('@')[0] || 'Admin',
-      email: req.authUser.email,
-      role: req.authRole,
-      status: 'active',
-      created_at: req.authUser.created_at || new Date().toISOString()
-    };
+    const admin = getAdminClient(supabaseClient, adminClient);
 
-    res.json({ users: [profile] });
+    if (!admin || typeof admin.auth?.admin?.listUsers !== 'function') {
+      const profile = normalizeAdminUser(req.authUser);
+      return res.json({ users: [profile] });
+    }
+
+    const { data, error } = await admin.auth.admin.listUsers();
+    if (error || !data || !Array.isArray(data.users)) {
+      const profile = normalizeAdminUser(req.authUser);
+      return res.json({ users: [profile] });
+    }
+
+    const users = data.users.map(normalizeAdminUser);
+    return res.json({ users });
+  });
+
+  app.get('/api/admin/profile', requireAdmin, async (req, res) => {
+    const admin = getAdminClient(supabaseClient, adminClient);
+    const profile = normalizeAdminUser(req.authUser);
+
+    if (!admin || typeof admin.auth?.admin?.listUsers !== 'function') {
+      return res.json({ user: profile });
+    }
+
+    const { data, error } = await admin.auth.admin.listUsers();
+    if (!error && data && Array.isArray(data.users)) {
+      const current = data.users.find((user) => user.id === req.authUser.id);
+      if (current) {
+        return res.json({ user: normalizeAdminUser(current) });
+      }
+    }
+
+    return res.json({ user: profile });
+  });
+
+  app.patch('/api/admin/profile', requireAdmin, async (req, res) => {
+    const fullName = typeof req.body?.full_name === 'string' ? req.body.full_name.trim() : '';
+    if (!fullName) {
+      return res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'Full name is required.' }
+      });
+    }
+
+    const admin = getAdminClient(supabaseClient, adminClient);
+    if (!admin || typeof admin.auth?.admin?.updateUserById !== 'function') {
+      return res.status(503).json({
+        error: { code: 'ADMIN_PROFILE_UNAVAILABLE', message: 'Profile updates are unavailable.' }
+      });
+    }
+
+    const { data, error } = await admin.auth.admin.updateUserById(req.authUser.id, {
+      user_metadata: { full_name: fullName }
+    });
+
+    if (error || !data?.user) {
+      return res.status(400).json({
+        error: { code: 'PROFILE_UPDATE_FAILED', message: 'Unable to update your profile.' }
+      });
+    }
+
+    return res.json({ user: normalizeAdminUser(data.user) });
+  });
+
+  app.patch('/api/admin/users/:id/role', requireAdmin, async (req, res) => {
+    const userId = String(req.params.id || '').trim();
+    if (!userId) {
+      return res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'A valid user ID is required.' }
+      });
+    }
+
+    const role = normalizeRole(req.body?.role);
+    if (req.body?.role === undefined || typeof req.body.role !== 'string' || !['candidate', 'admin', 'super_admin'].includes(req.body.role.trim().toLowerCase())) {
+      return res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'Role must be one of: candidate, admin, super_admin.' }
+      });
+    }
+
+    const admin = getAdminClient(supabaseClient, adminClient);
+    if (!admin || typeof admin.auth?.admin?.updateUserById !== 'function') {
+      return res.status(503).json({
+        error: { code: 'ADMIN_USERS_UNAVAILABLE', message: 'User management is unavailable.' }
+      });
+    }
+
+    const { data, error } = await admin.auth.admin.updateUserById(userId, {
+      app_metadata: { role }
+    });
+
+    if (error || !data?.user) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'User not found.' }
+      });
+    }
+
+    return res.json({ user: normalizeAdminUser(data.user) });
+  });
+
+  app.get('/api/admin/opportunities/:id', requireAdmin, async (req, res) => {
+    const admin = getAdminClient(supabaseClient, adminClient);
+    if (!admin || typeof admin.from !== 'function') {
+      return res.status(503).json({
+        error: { code: 'ADMIN_OPPORTUNITIES_UNAVAILABLE', message: 'Opportunity management is unavailable.' }
+      });
+    }
+
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'A valid opportunity ID is required.' }
+      });
+    }
+
+    const { data, error } = await admin
+      .from('opportunities')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !data) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Opportunity not found.' }
+      });
+    }
+
+    return res.json({ opportunity: data });
+  });
+
+  app.post('/api/admin/opportunities', requireAdmin, async (req, res) => {
+    const admin = getAdminClient(supabaseClient, adminClient);
+    if (!admin || typeof admin.from !== 'function') {
+      return res.status(503).json({
+        error: { code: 'ADMIN_OPPORTUNITIES_UNAVAILABLE', message: 'Opportunity creation is unavailable.' }
+      });
+    }
+
+    const payload = buildOpportunityPayload(req.body);
+
+    if (!payload.title || !payload.organisation || !payload.category || !payload.location) {
+      return res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'Title, organisation, category, and location are required.' }
+      });
+    }
+
+    const { data, error } = await admin
+      .from('opportunities')
+      .insert(payload)
+      .select()
+      .single();
+
+    if (error || !data) {
+      if (error?.code === '42P01' || error?.message?.toLowerCase().includes('does not exist')) {
+        return res.status(503).json({
+          error: { code: 'OPPORTUNITY_TABLE_MISSING', message: 'The Supabase opportunities table is not configured. Add the project table or run the migration before creating opportunities.' }
+        });
+      }
+
+      return res.status(400).json({
+        error: { code: 'OPPORTUNITY_CREATE_FAILED', message: 'Unable to create the opportunity.' }
+      });
+    }
+
+    return res.json({ opportunity: data });
+  });
+
+  app.patch('/api/admin/opportunities/:id', requireAdmin, async (req, res) => {
+    const admin = getAdminClient(supabaseClient, adminClient);
+    if (!admin || typeof admin.from !== 'function') {
+      return res.status(503).json({
+        error: { code: 'ADMIN_OPPORTUNITIES_UNAVAILABLE', message: 'Opportunity updates are unavailable.' }
+      });
+    }
+
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'A valid opportunity ID is required.' }
+      });
+    }
+
+    const existing = await admin.from('opportunities').select('*').eq('id', id).maybeSingle();
+    if (existing.error || !existing.data) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Opportunity not found.' }
+      });
+    }
+
+    const payload = buildOpportunityPayload({
+      ...existing.data,
+      ...req.body,
+      id,
+      updated_at: new Date().toISOString()
+    }, id);
+
+    if (!payload.title || !payload.organisation || !payload.category || !payload.location) {
+      return res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'Title, organisation, category, and location are required.' }
+      });
+    }
+
+    const { data, error } = await admin
+      .from('opportunities')
+      .update(payload)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      if (error?.code === '42P01' || error?.message?.toLowerCase().includes('does not exist')) {
+        return res.status(503).json({
+          error: { code: 'OPPORTUNITY_TABLE_MISSING', message: 'The Supabase opportunities table is not configured. Add the project table or run the migration before updating opportunities.' }
+        });
+      }
+
+      return res.status(400).json({
+        error: { code: 'OPPORTUNITY_UPDATE_FAILED', message: 'Unable to update the opportunity.' }
+      });
+    }
+
+    return res.json({ opportunity: data });
+  });
+
+  app.delete('/api/admin/opportunities/:id', requireAdmin, async (req, res) => {
+    const admin = getAdminClient(supabaseClient, adminClient);
+    if (!admin || typeof admin.from !== 'function') {
+      return res.status(503).json({
+        error: { code: 'ADMIN_OPPORTUNITIES_UNAVAILABLE', message: 'Opportunity deletion is unavailable.' }
+      });
+    }
+
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      return res.status(400).json({
+        error: { code: 'BAD_REQUEST', message: 'A valid opportunity ID is required.' }
+      });
+    }
+
+    const { data, error } = await admin
+      .from('opportunities')
+      .delete()
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      if (error?.code === '42P01' || error?.message?.toLowerCase().includes('does not exist')) {
+        return res.status(503).json({
+          error: { code: 'OPPORTUNITY_TABLE_MISSING', message: 'The Supabase opportunities table is not configured. Add the project table or run the migration before deleting opportunities.' }
+        });
+      }
+
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Opportunity not found.' }
+      });
+    }
+
+    return res.json({ deleted: data });
   });
 
   app.get('/api/admin/reports', requireAdmin, async (req, res) => {

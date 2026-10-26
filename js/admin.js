@@ -175,17 +175,18 @@
 
       updateRoleLabel(response.user?.role || 'admin');
       const metrics = response.metrics || {};
-      document.querySelector('[data-metric="totalUsers"]').textContent = String(metrics.totalUsers ?? '--');
-      document.querySelector('[data-metric="activeCandidates"]').textContent = String(metrics.activeCandidateAccounts ?? '--');
-      document.querySelector('[data-metric="totalOpportunities"]').textContent = String(metrics.totalOpportunities ?? '--');
-      document.querySelector('[data-metric="publishedOpportunities"]').textContent = String(metrics.publishedOpportunities ?? '--');
-      document.querySelector('[data-metric="draftOpportunities"]').textContent = String(metrics.draftOpportunities ?? '--');
-      document.querySelector('[data-metric="expiredOpportunities"]').textContent = String(metrics.expiredOpportunities ?? '--');
-      document.querySelector('[data-metric="awaitingReview"]').textContent = String(metrics.awaitingReview ?? '--');
+      const totalUsers = Number.isFinite(metrics.totalUsers) ? metrics.totalUsers : Number.isFinite(metrics.activeCandidateAccounts) ? metrics.activeCandidateAccounts : 0;
+      document.querySelector('[data-metric="totalUsers"]').textContent = String(totalUsers);
+      document.querySelector('[data-metric="activeCandidates"]').textContent = String(metrics.activeCandidateAccounts ?? 0);
+      document.querySelector('[data-metric="totalOpportunities"]').textContent = String(metrics.totalOpportunities ?? 0);
+      document.querySelector('[data-metric="publishedOpportunities"]').textContent = String(metrics.publishedOpportunities ?? 0);
+      document.querySelector('[data-metric="draftOpportunities"]').textContent = String(metrics.draftOpportunities ?? 0);
+      document.querySelector('[data-metric="expiredOpportunities"]').textContent = String(metrics.expiredOpportunities ?? 0);
+      document.querySelector('[data-metric="awaitingReview"]').textContent = String(metrics.awaitingReview ?? 0);
       document.querySelector('[data-last-updated]').textContent = new Date(response.generatedAt || Date.now()).toLocaleString();
-      document.querySelector('[data-chart-users]').textContent = String(metrics.totalUsers ?? '--');
-      document.querySelector('[data-chart-opportunities]').textContent = String(metrics.totalOpportunities ?? '--');
-      document.querySelector('[data-chart-activity]').textContent = String(metrics.awaitingReview ?? '--');
+      document.querySelector('[data-chart-users]').textContent = String(totalUsers);
+      document.querySelector('[data-chart-opportunities]').textContent = String(metrics.totalOpportunities ?? 0);
+      document.querySelector('[data-chart-activity]').textContent = String(metrics.awaitingReview ?? 0);
 
       if (activityList) {
         activityList.innerHTML = '<li>No admin activity recorded yet.</li>';
@@ -226,18 +227,134 @@
     }
   }
 
-  function initializeAdminOpportunities() {
+  async function initializeAdminOpportunities() {
     const tbody = document.querySelector('[data-admin-opportunities]');
     if (!tbody) return;
-    initializeAdminTable('[data-admin-opportunities]', 'admin/opportunities', (item) => `
-      <tr>
-        <td>${(item.title || 'Untitled').replace(/</g, '&lt;')}</td>
-        <td>${(item.organisation || 'N/A').replace(/</g, '&lt;')}</td>
-        <td><span class="status-pill">${item.status || 'draft'}</span></td>
-        <td>${item.verification_status || 'pending'}</td>
-        <td>${item.closing_date || '—'}</td>
-      </tr>
-    `);
+
+    const isAuthed = await ensureAdminAuthed();
+    if (!isAuthed) return;
+
+    const token = getAuthToken();
+
+    try {
+      const response = await window.SkillBridgeAPI.requestJson('admin/opportunities', {
+        baseUrl: apiBase,
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const items = Array.isArray(response.items) ? response.items : [];
+      if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="6">No opportunities available.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = items.map((item) => `
+        <tr>
+          <td>${(item.title || 'Untitled').replace(/</g, '&lt;')}</td>
+          <td>${(item.organisation || 'N/A').replace(/</g, '&lt;')}</td>
+          <td><span class="status-pill">${item.status || 'draft'}</span></td>
+          <td>${item.verification_status || item.verificationStatus || 'pending'}</td>
+          <td>${item.closing_date || item.closingDate || '—'}</td>
+          <td>
+            <div class="table-actions">
+              <button class="btn btn-secondary btn-small" type="button" data-opportunity-edit="${String(item.id || '').replace(/"/g, '&quot;')}">Edit</button>
+              <button class="btn btn-danger btn-small" type="button" data-opportunity-delete="${String(item.id || '').replace(/"/g, '&quot;')}">Delete</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+
+      tbody.querySelectorAll('[data-opportunity-edit]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const form = document.getElementById('admin-opportunity-form');
+          const message = document.getElementById('admin-opportunity-message');
+          const id = button.dataset.opportunityEdit;
+          if (!id || !form) return;
+
+          try {
+            const response = await window.SkillBridgeAPI.requestJson(`admin/opportunities/${encodeURIComponent(id)}`, {
+              baseUrl: apiBase,
+              headers: { Authorization: `Bearer ${token}` }
+            });
+
+            const item = response.opportunity || response.item;
+            if (!item) throw new Error('Opportunity not found.');
+
+            document.getElementById('opportunity-id').value = item.id || '';
+            document.getElementById('opportunity-title').value = item.title || '';
+            document.getElementById('opportunity-organisation').value = item.organisation || '';
+            document.getElementById('opportunity-category').value = item.category || '';
+            document.getElementById('opportunity-location').value = item.location || '';
+            document.getElementById('opportunity-experience').value = item.experience_level || item.experienceLevel || 'Varies';
+            document.getElementById('opportunity-closing-date').value = item.closing_date || item.closingDate || '';
+            document.getElementById('opportunity-description').value = item.description || '';
+            document.getElementById('opportunity-application').value = item.application_instructions || item.applicationInstructions || '';
+            document.getElementById('opportunity-url').value = item.official_application_url || item.officialApplicationUrl || '';
+            document.getElementById('opportunity-source').value = item.source_name || item.sourceName || '';
+            document.getElementById('opportunity-status').value = item.status || 'draft';
+            document.getElementById('opportunity-verified').checked = Boolean(item.is_verified ?? item.isVerified ?? true);
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) submitButton.textContent = 'Save changes';
+            if (message) {
+              message.textContent = `Editing ${item.title || 'opportunity'}.`;
+              message.dataset.kind = 'success';
+            }
+            window.scrollTo({ top: form.offsetTop - 20, behavior: 'smooth' });
+          } catch (error) {
+            if (message) {
+              message.textContent = error.message || 'Unable to load the opportunity.';
+              message.dataset.kind = 'error';
+            }
+          }
+        });
+      });
+
+      tbody.querySelectorAll('[data-opportunity-delete]').forEach((button) => {
+        button.addEventListener('click', async () => {
+          const id = button.dataset.opportunityDelete;
+          if (!id) return;
+
+          const confirmed = window.confirm('Delete this opportunity? This action cannot be undone.');
+          if (!confirmed) return;
+
+          const message = document.getElementById('admin-opportunity-message');
+          try {
+            await window.SkillBridgeAPI.requestJson(`admin/opportunities/${encodeURIComponent(id)}`, {
+              baseUrl: apiBase,
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (message) {
+              message.textContent = 'Opportunity deleted successfully.';
+              message.dataset.kind = 'success';
+            }
+            await initializeAdminOpportunities();
+          } catch (error) {
+            if (message) {
+              message.textContent = error.message || 'Unable to delete the opportunity.';
+              message.dataset.kind = 'error';
+            }
+          }
+        });
+      });
+    } catch (error) {
+      tbody.innerHTML = '<tr><td colspan="6">Unable to load opportunities.</td></tr>';
+    }
+  }
+
+  async function updateUserRole(userId, role) {
+    const token = getAuthToken();
+    const response = await window.SkillBridgeAPI.requestJson(`admin/users/${encodeURIComponent(String(userId))}/role`, {
+      baseUrl: apiBase,
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ role })
+    });
+
+    return response.user;
   }
 
   function initializeAdminUsers() {
@@ -247,11 +364,179 @@
       <tr>
         <td>${(user.full_name || user.email || 'User').replace(/</g, '&lt;')}</td>
         <td>${(user.email || '—').replace(/</g, '&lt;')}</td>
-        <td>${user.role || 'candidate'}</td>
+        <td>
+          <select data-user-role-select data-user-id="${String(user.id || '').replace(/"/g, '&quot;')}" aria-label="Role for ${String(user.full_name || user.email || 'user').replace(/</g, '&lt;')}">
+            <option value="candidate" ${user.role === 'candidate' ? 'selected' : ''}>Candidate</option>
+            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+            <option value="super_admin" ${user.role === 'super_admin' ? 'selected' : ''}>Super admin</option>
+          </select>
+        </td>
         <td><span class="status-pill">${user.status || 'active'}</span></td>
         <td>${user.created_at ? new Date(user.created_at).toLocaleDateString() : '—'}</td>
       </tr>
     `);
+
+    tbody.querySelectorAll('[data-user-role-select]').forEach((select) => {
+      const originalRole = select.value;
+      select.addEventListener('change', async (event) => {
+        const nextRole = event.target.value;
+        const userId = event.target.dataset.userId;
+        event.target.disabled = true;
+
+        try {
+          await updateUserRole(userId, nextRole);
+          event.target.dataset.role = nextRole;
+        } catch (error) {
+          event.target.value = originalRole;
+          const message = error.message || 'Unable to update the user role.';
+          window.alert(message);
+        } finally {
+          event.target.disabled = false;
+        }
+      });
+    });
+  }
+
+  async function initializeAdminSettings() {
+    const form = document.getElementById('admin-settings-form');
+    if (!form) return;
+
+    const isAuthed = await ensureAdminAuthed();
+    if (!isAuthed) return;
+
+    const token = getAuthToken();
+    const fullNameInput = document.getElementById('admin-full-name');
+    const successMessage = document.getElementById('admin-settings-message');
+
+    try {
+      const response = await window.SkillBridgeAPI.requestJson('admin/profile', {
+        baseUrl: apiBase,
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.user?.full_name) {
+        fullNameInput.value = response.user.full_name;
+      }
+    } catch (error) {
+      if (successMessage) {
+        successMessage.textContent = error.message || 'Unable to load your profile.';
+        successMessage.dataset.kind = 'error';
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const fullName = (fullNameInput.value || '').trim();
+      if (!fullName) {
+        if (successMessage) {
+          successMessage.textContent = 'Please enter your full name.';
+          successMessage.dataset.kind = 'error';
+        }
+        return;
+      }
+
+      try {
+        const response = await window.SkillBridgeAPI.requestJson('admin/profile', {
+          baseUrl: apiBase,
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ full_name: fullName })
+        });
+
+        if (successMessage) {
+          successMessage.textContent = `Profile updated for ${response.user?.full_name || fullName}.`;
+          successMessage.dataset.kind = 'success';
+        }
+      } catch (error) {
+        if (successMessage) {
+          successMessage.textContent = error.message || 'Unable to update your profile.';
+          successMessage.dataset.kind = 'error';
+        }
+      }
+    });
+  }
+
+  async function initializeAdminOpportunityForm() {
+    const form = document.getElementById('admin-opportunity-form');
+    if (!form) return;
+
+    const isAuthed = await ensureAdminAuthed();
+    if (!isAuthed) return;
+
+    const token = getAuthToken();
+    const message = document.getElementById('admin-opportunity-message');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    function resetOpportunityForm() {
+      form.reset();
+      const hiddenId = document.getElementById('opportunity-id');
+      if (hiddenId) hiddenId.value = '';
+      if (submitButton) submitButton.textContent = 'Create opportunity';
+      document.getElementById('opportunity-verified').checked = true;
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const payload = {
+        id: document.getElementById('opportunity-id')?.value || undefined,
+        title: document.getElementById('opportunity-title').value.trim(),
+        organisation: document.getElementById('opportunity-organisation').value.trim(),
+        category: document.getElementById('opportunity-category').value.trim(),
+        location: document.getElementById('opportunity-location').value.trim(),
+        closing_date: document.getElementById('opportunity-closing-date').value || null,
+        experience_level: document.getElementById('opportunity-experience').value.trim() || 'Varies',
+        description: document.getElementById('opportunity-description').value.trim(),
+        application_instructions: document.getElementById('opportunity-application').value.trim(),
+        official_application_url: document.getElementById('opportunity-url').value.trim(),
+        source_name: document.getElementById('opportunity-source').value.trim(),
+        status: document.getElementById('opportunity-status').value || 'draft',
+        is_verified: document.getElementById('opportunity-verified').checked,
+        verification_status: document.getElementById('opportunity-verified').checked ? 'verified' : 'pending',
+        is_sample: false,
+        eligibility: [],
+        required_documents: []
+      };
+
+      if (!payload.title || !payload.organisation || !payload.category || !payload.location) {
+        if (message) {
+          message.textContent = 'Please fill in title, organisation, category, and location.';
+          message.dataset.kind = 'error';
+        }
+        return;
+      }
+
+      try {
+        const endpoint = payload.id ? `admin/opportunities/${encodeURIComponent(payload.id)}` : 'admin/opportunities';
+        const method = payload.id ? 'PATCH' : 'POST';
+        const response = await window.SkillBridgeAPI.requestJson(endpoint, {
+          baseUrl: apiBase,
+          method,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (message) {
+          message.textContent = payload.id
+            ? `Opportunity updated: ${response.opportunity?.title || payload.title}.`
+            : `Opportunity created: ${response.opportunity?.title || payload.title}.`;
+          message.dataset.kind = 'success';
+        }
+        resetOpportunityForm();
+        await initializeAdminOpportunities();
+      } catch (error) {
+        if (message) {
+          message.textContent = error.message || 'Unable to save the opportunity.';
+          message.dataset.kind = 'error';
+        }
+      }
+    });
+
+    resetOpportunityForm();
   }
 
   function initializeLogout() {
@@ -279,9 +564,13 @@
   }
   if (page === 'opportunities') {
     initializeAdminOpportunities();
+    initializeAdminOpportunityForm();
   }
   if (page === 'users') {
     initializeAdminUsers();
+  }
+  if (page === 'settings') {
+    initializeAdminSettings();
   }
 
   initializeAdminLogin();

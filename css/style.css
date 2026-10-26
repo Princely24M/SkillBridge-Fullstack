@@ -4489,6 +4489,132 @@ ul, ol {
   color: var(--text);
 }
 
+.admin-settings-form,
+.admin-opportunity-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.admin-form-row {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-form-row label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.admin-form-row input,
+.admin-form-row textarea,
+.admin-form-row select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  color: var(--text);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.admin-form-row textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.admin-form-row input:focus,
+.admin-form-row textarea:focus,
+.admin-form-row select:focus {
+  border-color: var(--secondary);
+  box-shadow: 0 0 0 3px rgba(15, 139, 141, 0.12);
+}
+
+.admin-form-span-2 {
+  grid-column: 1 / -1;
+}
+
+.admin-form-checkbox {
+  align-content: end;
+}
+
+.admin-form-checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 46px;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.admin-form-checkbox input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--secondary);
+}
+
+.admin-form-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.admin-form-message {
+  min-height: 1.5em;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.admin-form-message[data-kind="success"] {
+  color: var(--success);
+}
+
+.admin-form-message[data-kind="error"] {
+  color: var(--danger);
+}
+
+[data-user-role-select] {
+  min-width: 150px;
+  width: 100%;
+  max-width: 160px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background: linear-gradient(135deg, var(--surface-alt), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  padding: 0.6rem 2.2rem 0.6rem 0.75rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.2;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) calc(50% - 2px), calc(100% - 11px) calc(50% - 2px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 1px 2px rgba(15, 139, 141, 0.04);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+[data-user-role-select]:focus-visible {
+  border-color: var(--secondary);
+  box-shadow: 0 0 0 3px rgba(15, 139, 141, 0.12);
+}
+
+[data-user-role-select]:hover {
+  border-color: var(--secondary-light);
+}
+
 .admin-auth-body {
   background: linear-gradient(135deg, rgba(15, 139, 141, 0.08), rgba(18, 59, 93, 0.04), var(--background));
 }

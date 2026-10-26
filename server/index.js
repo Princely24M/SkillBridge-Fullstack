@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { createSupabaseClient, readSupabaseConfig } = require('./lib/supabase');
+const { createSupabaseClient, createAdminSupabaseClient, readSupabaseConfig } = require('./lib/supabase');
 const { createOpportunityRepository } = require('./lib/opportunities');
 const { createApp } = require('./app');
 
@@ -24,8 +24,9 @@ function readPort(value) {
 const port = readPort(process.env.PORT);
 const supabaseConfig = readSupabaseConfig();
 const supabase = createSupabaseClient();
+const adminSupabase = createAdminSupabaseClient();
 const opportunities = createOpportunityRepository(supabase);
-const app = createApp({ opportunities, authConfig: supabaseConfig, supabaseClient: supabase });
+const app = createApp({ opportunities, authConfig: supabaseConfig, supabaseClient: supabase, adminClient: adminSupabase });
 
 app.listen(port, () => {
   console.log(`SkillBridge API listening on port ${port}.`);

@@ -47,7 +47,76 @@
         <section class="admin-panel">
           <div class="admin-panel-header">
             <h2>Opportunity management</h2>
-            <button class="btn btn-primary" type="button">Add opportunity</button>
+          </div>
+
+          <form id="admin-opportunity-form" class="admin-opportunity-form">
+            <input id="opportunity-id" name="id" type="hidden" />
+            <div class="admin-form-grid">
+              <div class="admin-form-row">
+                <label for="opportunity-title">Title</label>
+                <input id="opportunity-title" name="title" type="text" required />
+              </div>
+              <div class="admin-form-row">
+                <label for="opportunity-organisation">Organisation</label>
+                <input id="opportunity-organisation" name="organisation" type="text" required />
+              </div>
+              <div class="admin-form-row">
+                <label for="opportunity-category">Category</label>
+                <input id="opportunity-category" name="category" type="text" required />
+              </div>
+              <div class="admin-form-row">
+                <label for="opportunity-location">Location</label>
+                <input id="opportunity-location" name="location" type="text" required />
+              </div>
+              <div class="admin-form-row">
+                <label for="opportunity-experience">Experience level</label>
+                <input id="opportunity-experience" name="experience_level" type="text" value="Varies" />
+              </div>
+              <div class="admin-form-row">
+                <label for="opportunity-closing-date">Closing date</label>
+                <input id="opportunity-closing-date" name="closing_date" type="date" />
+              </div>
+              <div class="admin-form-row admin-form-span-2">
+                <label for="opportunity-description">Description</label>
+                <textarea id="opportunity-description" name="description" rows="4" required></textarea>
+              </div>
+              <div class="admin-form-row admin-form-span-2">
+                <label for="opportunity-application">Application instructions</label>
+                <textarea id="opportunity-application" name="application_instructions" rows="3"></textarea>
+              </div>
+              <div class="admin-form-row admin-form-span-2">
+                <label for="opportunity-url">Official application URL</label>
+                <input id="opportunity-url" name="official_application_url" type="url" />
+              </div>
+              <div class="admin-form-row">
+                <label for="opportunity-source">Source name</label>
+                <input id="opportunity-source" name="source_name" type="text" />
+              </div>
+              <div class="admin-form-row">
+                <label for="opportunity-status">Status</label>
+                <select id="opportunity-status" name="status">
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
+                  <option value="pending">Pending</option>
+                </select>
+              </div>
+              <div class="admin-form-row admin-form-checkbox">
+                <label for="opportunity-verified">
+                  <input id="opportunity-verified" name="is_verified" type="checkbox" checked />
+                  Mark as verified
+                </label>
+              </div>
+            </div>
+            <div class="admin-form-actions">
+              <button class="btn btn-primary" type="submit">Create opportunity</button>
+            </div>
+            <p id="admin-opportunity-message" class="admin-form-message" aria-live="polite"></p>
+          </form>
+        </section>
+
+        <section class="admin-panel">
+          <div class="admin-panel-header">
+            <h2>Current listings</h2>
           </div>
           <div class="admin-table-wrap">
             <table class="admin-table">
@@ -58,6 +127,7 @@
                   <th>Status</th>
                   <th>Verification</th>
                   <th>Closing date</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody data-admin-opportunities>
