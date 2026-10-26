@@ -128,6 +128,16 @@ describe('SkillBridge public API', () => {
     });
   });
 
+  it('forces fresh admin HTML and exposes the admin landing route', async () => {
+    const dashboard = await running.get('/admin/dashboard.html');
+    assert.equal(dashboard.status, 200);
+    assert.match((dashboard.headers.get('cache-control') || ''), /no-store/i);
+
+    const landing = await running.get('/admin', { redirect: 'manual' });
+    assert.equal(landing.status, 302);
+    assert.equal(landing.headers.get('location'), '/admin/dashboard.html');
+  });
+
   it('returns a minimal health response without environment data', async () => {
     const previous = process.env.API_TEST_SECRET;
     process.env.API_TEST_SECRET = secretSentinel;

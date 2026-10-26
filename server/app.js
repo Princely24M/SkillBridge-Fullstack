@@ -253,7 +253,20 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
   const staticRoot = path.resolve(__dirname, '..');
   app.disable('x-powered-by');
   app.use(express.json({ limit: '10kb' }));
-  app.use(express.static(staticRoot, { index: 'index.html', redirect: false }));
+
+  app.get('/admin', (req, res) => {
+    res.redirect(302, '/admin/dashboard.html');
+  });
+
+  app.use(express.static(staticRoot, {
+    index: 'index.html',
+    redirect: false,
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }));
   app.use((req, res, next) => {
     const origin = req.get('origin');
     if (origin && isLoopbackOrigin(origin)) {
