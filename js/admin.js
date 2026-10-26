@@ -176,17 +176,29 @@
       updateRoleLabel(response.user?.role || 'admin');
       const metrics = response.metrics || {};
       const totalUsers = Number.isFinite(metrics.totalUsers) ? metrics.totalUsers : Number.isFinite(metrics.activeCandidateAccounts) ? metrics.activeCandidateAccounts : 0;
-      document.querySelector('[data-metric="totalUsers"]').textContent = String(totalUsers);
-      document.querySelector('[data-metric="activeCandidates"]').textContent = String(metrics.activeCandidateAccounts ?? 0);
-      document.querySelector('[data-metric="totalOpportunities"]').textContent = String(metrics.totalOpportunities ?? 0);
-      document.querySelector('[data-metric="publishedOpportunities"]').textContent = String(metrics.publishedOpportunities ?? 0);
-      document.querySelector('[data-metric="draftOpportunities"]').textContent = String(metrics.draftOpportunities ?? 0);
-      document.querySelector('[data-metric="expiredOpportunities"]').textContent = String(metrics.expiredOpportunities ?? 0);
-      document.querySelector('[data-metric="awaitingReview"]').textContent = String(metrics.awaitingReview ?? 0);
-      document.querySelector('[data-last-updated]').textContent = new Date(response.generatedAt || Date.now()).toLocaleString();
-      document.querySelector('[data-chart-users]').textContent = String(totalUsers);
-      document.querySelector('[data-chart-opportunities]').textContent = String(metrics.totalOpportunities ?? 0);
-      document.querySelector('[data-chart-activity]').textContent = String(metrics.awaitingReview ?? 0);
+      const totalUsersNode = document.querySelector('[data-metric="totalUsers"]');
+      const activeCandidatesNode = document.querySelector('[data-metric="activeCandidates"]');
+      const totalOpportunitiesNode = document.querySelector('[data-metric="totalOpportunities"]');
+      const publishedNode = document.querySelector('[data-metric="publishedOpportunities"]');
+      const draftNode = document.querySelector('[data-metric="draftOpportunities"]');
+      const expiredNode = document.querySelector('[data-metric="expiredOpportunities"]');
+      const awaitingNode = document.querySelector('[data-metric="awaitingReview"]');
+      const lastUpdatedNode = document.querySelector('[data-last-updated]');
+      const chartUsersNode = document.querySelector('[data-chart-users]');
+      const chartOpportunitiesNode = document.querySelector('[data-chart-opportunities]');
+      const chartActivityNode = document.querySelector('[data-chart-activity]');
+
+      if (totalUsersNode) totalUsersNode.textContent = String(totalUsers);
+      if (activeCandidatesNode) activeCandidatesNode.textContent = String(metrics.activeCandidateAccounts ?? 0);
+      if (totalOpportunitiesNode) totalOpportunitiesNode.textContent = String(metrics.totalOpportunities ?? 0);
+      if (publishedNode) publishedNode.textContent = String(metrics.publishedOpportunities ?? 0);
+      if (draftNode) draftNode.textContent = String(metrics.draftOpportunities ?? 0);
+      if (expiredNode) expiredNode.textContent = String(metrics.expiredOpportunities ?? 0);
+      if (awaitingNode) awaitingNode.textContent = String(metrics.awaitingReview ?? 0);
+      if (lastUpdatedNode) lastUpdatedNode.textContent = new Date(response.generatedAt || Date.now()).toLocaleString();
+      if (chartUsersNode) chartUsersNode.textContent = String(totalUsers);
+      if (chartOpportunitiesNode) chartOpportunitiesNode.textContent = String(metrics.totalOpportunities ?? 0);
+      if (chartActivityNode) chartActivityNode.textContent = String(metrics.awaitingReview ?? 0);
 
       if (activityList) {
         activityList.innerHTML = '<li>No admin activity recorded yet.</li>';
@@ -198,6 +210,64 @@
       if (activityList) {
         activityList.innerHTML = '<li>Unable to load activity right now.</li>';
       }
+    }
+  }
+
+  async function initializeAdminReports() {
+    const reportsContainer = document.querySelector('[data-admin-reports]');
+    if (!reportsContainer) return;
+
+    const isAuthed = await ensureAdminAuthed();
+    if (!isAuthed) return;
+
+    const token = getAuthToken();
+    try {
+      const response = await window.SkillBridgeAPI.requestJson('admin/reports', {
+        baseUrl: apiBase,
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const summary = response.summary || {};
+      const usersNode = document.querySelector('[data-report-users]');
+      const opportunitiesNode = document.querySelector('[data-report-opportunities]');
+      const pendingNode = document.querySelector('[data-report-pending]');
+      if (usersNode) usersNode.textContent = String(summary.totalUsers ?? 0);
+      if (opportunitiesNode) opportunitiesNode.textContent = String(summary.totalOpportunities ?? 0);
+      if (pendingNode) pendingNode.textContent = String(summary.awaitingReview ?? 0);
+    } catch (error) {
+      const usersNode = document.querySelector('[data-report-users]');
+      const opportunitiesNode = document.querySelector('[data-report-opportunities]');
+      const pendingNode = document.querySelector('[data-report-pending]');
+      if (usersNode) usersNode.textContent = '--';
+      if (opportunitiesNode) opportunitiesNode.textContent = '--';
+      if (pendingNode) pendingNode.textContent = '--';
+    }
+  }
+
+  async function initializeAdminActivity() {
+    const activityList = document.querySelector('[data-admin-activity]');
+    if (!activityList) return;
+
+    const isAuthed = await ensureAdminAuthed();
+    if (!isAuthed) return;
+
+    const token = getAuthToken();
+    try {
+      const response = await window.SkillBridgeAPI.requestJson('admin/reports', {
+        baseUrl: apiBase,
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const summary = response.summary || {};
+      const categories = Array.isArray(response.categories) ? response.categories : [];
+      activityList.innerHTML = [
+        `<li><strong>${summary.totalUsers ?? 0}</strong> registered users</li>`,
+        `<li><strong>${summary.totalOpportunities ?? 0}</strong> visible opportunities</li>`,
+        `<li><strong>${summary.awaitingReview ?? 0}</strong> items awaiting review</li>`,
+        `<li><strong>${categories.length}</strong> opportunity categories tracked</li>`,
+        `<li>Last updated: ${new Date(response.generatedAt || Date.now()).toLocaleString()}</li>`
+      ].join('');
+    } catch (error) {
+      activityList.innerHTML = '<li>Unable to load audit activity right now.</li>';
     }
   }
 
@@ -561,6 +631,12 @@
 
   if (page === 'dashboard') {
     initializeAdminDashboard();
+  }
+  if (page === 'reports') {
+    initializeAdminReports();
+  }
+  if (page === 'activity') {
+    initializeAdminActivity();
   }
   if (page === 'opportunities') {
     initializeAdminOpportunities();

@@ -1,3 +1,5 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const assert = require('node:assert/strict');
 const { after, before, describe, it } = require('node:test');
 const api = require('../js/api.js');
@@ -126,6 +128,17 @@ describe('SkillBridge public API', () => {
       service: 'skillbridge-api',
       endpoints: ['/api/health', '/api/opportunities', '/api/opportunities/:id']
     });
+  });
+
+  it('uses dedicated page modes for reports and activity admin screens', async () => {
+    const repoRoot = path.resolve(__dirname, '..');
+    const reportsHtml = fs.readFileSync(path.join(repoRoot, 'admin', 'reports.html'), 'utf8');
+    const activityHtml = fs.readFileSync(path.join(repoRoot, 'admin', 'activity.html'), 'utf8');
+
+    assert.match(reportsHtml, /data-admin-page="reports"/i);
+    assert.match(reportsHtml, /data-admin-reports/i);
+    assert.match(activityHtml, /data-admin-page="activity"/i);
+    assert.match(activityHtml, /data-admin-activity/i);
   });
 
   it('forces fresh admin HTML and exposes the admin landing route', async () => {

@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../css/style.css" />
 </head>
-<body data-admin-page="dashboard">
+<body data-admin-page="reports">
   <div class="admin-shell">
     <aside class="admin-sidebar" aria-label="Admin navigation">
       <div class="admin-sidebar-header">
@@ -46,10 +46,10 @@
           <div class="admin-panel-header">
             <h2>Operational insights</h2>
           </div>
-          <div class="admin-chart-placeholder">
-            <div class="chart-block"><span>New registrations</span><strong>--</strong></div>
-            <div class="chart-block"><span>Visible opportunities</span><strong>--</strong></div>
-            <div class="chart-block"><span>Pending verification</span><strong>--</strong></div>
+          <div class="admin-chart-placeholder" data-admin-reports>
+            <div class="chart-block"><span>New registrations</span><strong data-report-users>--</strong></div>
+            <div class="chart-block"><span>Visible opportunities</span><strong data-report-opportunities>--</strong></div>
+            <div class="chart-block"><span>Pending verification</span><strong data-report-pending>--</strong></div>
           </div>
         </section>
       </main>
