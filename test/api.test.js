@@ -988,6 +988,57 @@ describe('Admin route protection', () => {
       const removed = await deleteResponse.json();
       assert.equal(removed.deleted.id, 'skillbridge-new');
 
+      const schemaMismatchApp = createApp({
+        opportunities: createFixtureRepository([]).repository,
+        authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
+        supabaseClient: createAuthClient('admin'),
+        adminClient: {
+          from() {
+            return {
+              insert() {
+                return {
+                  select() {
+                    return {
+                      single() {
+                        return Promise.resolve({
+                          data: null,
+                          error: { code: '23514', message: 'new row for relation "opportunities" violates check constraint "opportunities_status_check"' }
+                        });
+                      }
+                    };
+                  }
+                };
+              }
+            };
+          }
+        }
+      });
+      const schemaMismatchServer = schemaMismatchApp.listen(0);
+      await new Promise((resolve) => schemaMismatchServer.once('listening', resolve));
+
+      try {
+        const schemaMismatchResponse = await fetch(`http://127.0.0.1:${schemaMismatchServer.address().port}/api/admin/opportunities`, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer token',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            title: 'Broken status opportunity',
+            organisation: 'SkillBridge',
+            category: 'Job',
+            location: 'Cape Town',
+            description: 'Test status mismatch',
+            status: 'draft'
+          })
+        });
+        assert.equal(schemaMismatchResponse.status, 400);
+        const schemaMismatchBody = await schemaMismatchResponse.json();
+        assert.equal(schemaMismatchBody.error.code, 'OPPORTUNITY_STATUS_INVALID');
+      } finally {
+        await new Promise((resolve, reject) => schemaMismatchServer.close((error) => error ? reject(error) : resolve()));
+      }
+
       const profileResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/profile`, {
         method: 'PATCH',
         headers: {

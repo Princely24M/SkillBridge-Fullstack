@@ -536,9 +536,16 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
       .single();
 
     if (error || !data) {
-      if (error?.code === '42P01' || error?.message?.toLowerCase().includes('does not exist')) {
+      const message = typeof error?.message === 'string' ? error.message.toLowerCase() : '';
+      if (error?.code === '42P01' || message.includes('does not exist')) {
         return res.status(503).json({
           error: { code: 'OPPORTUNITY_TABLE_MISSING', message: 'The Supabase opportunities table is not configured. Add the project table or run the migration before creating opportunities.' }
+        });
+      }
+
+      if (error?.code === '23514' || message.includes('check constraint') || message.includes('violates check constraint')) {
+        return res.status(400).json({
+          error: { code: 'OPPORTUNITY_STATUS_INVALID', message: 'The Supabase opportunities table is using an older status constraint. Update the table schema to allow draft, active, expired, and pending values, then try again.' }
         });
       }
 
@@ -593,9 +600,16 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
       .single();
 
     if (error || !data) {
-      if (error?.code === '42P01' || error?.message?.toLowerCase().includes('does not exist')) {
+      const message = typeof error?.message === 'string' ? error.message.toLowerCase() : '';
+      if (error?.code === '42P01' || message.includes('does not exist')) {
         return res.status(503).json({
           error: { code: 'OPPORTUNITY_TABLE_MISSING', message: 'The Supabase opportunities table is not configured. Add the project table or run the migration before updating opportunities.' }
+        });
+      }
+
+      if (error?.code === '23514' || message.includes('check constraint') || message.includes('violates check constraint')) {
+        return res.status(400).json({
+          error: { code: 'OPPORTUNITY_STATUS_INVALID', message: 'The Supabase opportunities table is using an older status constraint. Update the table schema to allow draft, active, expired, and pending values, then try again.' }
         });
       }
 
