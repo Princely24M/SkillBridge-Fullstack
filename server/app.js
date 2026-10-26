@@ -346,15 +346,17 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
 
     const admin = getAdminClient(supabaseClient, adminClient);
     let totalUsers = 0;
+    let activeCandidateAccounts = 0;
     if (admin && typeof admin.auth?.admin?.listUsers === 'function') {
       const { data, error } = await admin.auth.admin.listUsers();
       if (!error && Array.isArray(data?.users)) {
         totalUsers = data.users.length;
+        activeCandidateAccounts = data.users.filter((user) => normalizeRole(user.app_metadata?.role || user.role || 'candidate') === 'candidate').length;
       }
     }
 
     metrics.totalUsers = totalUsers;
-    metrics.activeCandidateAccounts = totalUsers;
+    metrics.activeCandidateAccounts = activeCandidateAccounts;
 
     res.json({
       user: {

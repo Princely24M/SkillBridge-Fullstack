@@ -681,6 +681,7 @@ describe('Admin route protection', () => {
       const body = await adminResult.json();
       assert.ok(body.metrics.totalOpportunities >= 1);
       assert.equal(body.metrics.totalUsers, 2);
+      assert.equal(body.metrics.activeCandidateAccounts, 1);
       assert.equal(body.user.role, 'admin');
 
       const selfDeclaredAdminResult = await fetch(`http://127.0.0.1:${selfDeclaredAdminServer.address().port}/api/admin/metrics`, {
