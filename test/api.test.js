@@ -46,8 +46,6 @@ function createFixtureRepository(items) {
       async list(filters) {
         calls.list.push(filters);
         return items.filter((item) => {
-          const today = new Date().toISOString().slice(0, 10);
-          if (item.closing_date && item.closing_date < today) return false;
           if (filters.category && item.category !== filters.category) return false;
           if (filters.location && !item.location.toLowerCase().includes(filters.location.toLowerCase())) return false;
           if (filters.q) {
@@ -61,9 +59,7 @@ function createFixtureRepository(items) {
       },
       async getById(id) {
         calls.getById.push(id);
-        const today = new Date().toISOString().slice(0, 10);
-        return items.find((item) => item.id === id
-          && (!item.closing_date || item.closing_date >= today)) || null;
+        return items.find((item) => item.id === id) || null;
       }
     }
   };
@@ -94,11 +90,11 @@ describe('SkillBridge public API', () => {
       closing_date: null,
       created_at: '2026-10-02T00:00:00Z'
     }),
-    makeOpportunity({ id: 'expired', closing_date: '2000-01-01' }),
+    makeOpportunity({ id: 'expired', closing_date: '2000-01-01', status: 'pending' }),
     makeOpportunity({ id: 'unverified', is_verified: false }),
     makeOpportunity({ id: 'sample', is_sample: true }),
     makeOpportunity({ id: 'needs-review', verification_status: 'needs_review' }),
-    makeOpportunity({ id: 'inactive', status: 'expired' })
+    makeOpportunity({ id: 'inactive', status: 'closed' })
   ];
 
   before(async () => {
@@ -233,10 +229,11 @@ describe('SkillBridge public API', () => {
     const body = await response.json();
 
     assert.equal(response.status, 200);
-    assert.deepEqual(body.pagination, { page: 1, limit: 1, total: 2, totalPages: 2 });
+    assert.deepEqual(body.pagination, { page: 1, limit: 1, total: 3, totalPages: 3 });
     assert.equal(body.items.length, 1);
-    assert.equal(body.items[0].id, 'skillbridge-106');
-    assert.equal(body.items.some((item) => item.id === 'expired'), false);
+    assert.equal(body.items[0].id, 'expired');
+    const finalPage = await running.get('/api/opportunities?page=3&limit=1');
+    assert.equal((await finalPage.json()).items[0].id, 'skillbridge-107');
   });
 
   it('serves the real list route to a loopback-hosted frontend', async () => {
@@ -249,7 +246,7 @@ describe('SkillBridge public API', () => {
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('access-control-allow-origin'), origin);
     assert.ok(Array.isArray(body.items));
-    assert.deepEqual(body.pagination, { page: 1, limit: 20, total: 2, totalPages: 1 });
+    assert.deepEqual(body.pagination, { page: 1, limit: 20, total: 3, totalPages: 1 });
   });
 
   it('allows loopback admin requests to pass the authorization-header preflight', async () => {
@@ -315,8 +312,8 @@ describe('SkillBridge public API', () => {
     const body = await response.json();
 
     assert.equal(response.status, 200);
-    assert.deepEqual(body.items.map((item) => item.id), ['skillbridge-107', 'skillbridge-106']);
-    assert.equal(body.pagination.total, 2);
+    assert.deepEqual(body.items.map((item) => item.id), ['skillbridge-107', 'expired', 'skillbridge-106']);
+    assert.equal(body.pagination.total, 3);
   });
 
   it('applies category, location, and keyword filters', async () => {
@@ -393,14 +390,15 @@ describe('SkillBridge public API', () => {
     });
   });
 
-  it('returns 404 for unknown and ineligible IDs', async () => {
+  it('returns expired records and 404 for unknown and ineligible IDs', async () => {
     const unknown = await running.get('/api/opportunities/unknown-id');
     const unverified = await running.get('/api/opportunities/unverified');
     const expired = await running.get('/api/opportunities/expired');
 
     assert.equal(unknown.status, 404);
     assert.equal(unverified.status, 404);
-    assert.equal(expired.status, 404);
+    assert.equal(expired.status, 200);
+    assert.equal((await expired.json()).item.id, 'expired');
     assert.deepEqual(await unknown.json(), {
       error: { code: 'NOT_FOUND', message: 'Opportunity not found.' }
     });
@@ -412,6 +410,7 @@ describe('SkillBridge public API', () => {
         return {
           select() { return this; },
           eq() { return this; },
+          or() { return this; },
           order() { return this; },
           range() {
             return Promise.resolve({
@@ -498,6 +497,10 @@ describe('Supabase opportunity repository', () => {
             this.filters.push(['eq', column, value]);
             return this;
           },
+          or(expression) {
+            this.filters.push(['or', expression]);
+            return this;
+          },
           order(column, options) {
             this.orderBy = [column, options];
             return this;
@@ -526,12 +529,12 @@ describe('Supabase opportunity repository', () => {
     assert.equal(seen.every((query) => query.table === 'opportunities'), true);
     assert.equal(writeCalls, 0);
     for (const query of seen) {
-      assert.deepEqual(query.filters.slice(0, 4), [
-        ['eq', 'status', 'active'],
+      assert.deepEqual(query.filters.slice(0, 3), [
         ['eq', 'is_verified', true],
         ['eq', 'is_sample', false],
         ['eq', 'verification_status', 'verified']
       ]);
+      assert.match(query.filters.find(([kind]) => kind === 'or')[1], /^status\.eq\.active,closing_date\.lt\.\d{4}-\d{2}-\d{2}$/);
     }
     assert.deepEqual(seen[1].filters.at(-1), ['eq', 'id', 'skillbridge-106']);
   });
@@ -544,6 +547,7 @@ describe('Supabase opportunity repository', () => {
           filters: [],
           select() { return this; },
           eq(column, value) { this.filters.push(['eq', column, value]); return this; },
+          or(expression) { this.filters.push(['or', expression]); return this; },
           ilike(column, value) { ilikeFilters.push([column, value]); return this; },
           order() { return this; },
           range() { return Promise.resolve({ data: [], error: null, count: 0 }); }
@@ -660,7 +664,11 @@ describe('Admin route protection', () => {
       supabaseClient: createAuthClient('candidate')
     });
     const appWithAdmin = createApp({
-      opportunities: createFixtureRepository([makeOpportunity()]).repository,
+      opportunities: createFixtureRepository([
+        makeOpportunity(),
+        makeOpportunity({ id: 'closed-future', closing_date: '2099-12-31', status: 'closed' }),
+        makeOpportunity({ id: 'closing-today', closing_date: new Date().toISOString().slice(0, 10) })
+      ]).repository,
       authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
       supabaseClient: createAuthClient('admin'),
       adminClient: adminUsersClient
@@ -693,6 +701,7 @@ describe('Admin route protection', () => {
       assert.equal(adminResult.status, 200);
       const body = await adminResult.json();
       assert.ok(body.metrics.totalOpportunities >= 1);
+      assert.equal(body.metrics.expiredOpportunities, 1);
       assert.equal(body.metrics.totalUsers, 2);
       assert.equal(body.metrics.activeCandidateAccounts, 1);
       assert.equal(body.user.role, 'admin');
@@ -993,6 +1002,7 @@ describe('Admin route protection', () => {
         authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
         supabaseClient: createAuthClient('admin'),
         adminClient: {
+          auth: { admin: {} },
           from() {
             return {
               insert() {
@@ -1057,6 +1067,33 @@ describe('Admin route protection', () => {
 });
 
 describe('Frontend API client', () => {
+  it('uses valid UTC calendar dates for date-only opportunity ranges', () => {
+    const api = require('../js/api.js');
+
+    assert.equal(api.isValidDateOnly('2026-10-28'), true);
+    assert.equal(api.isValidDateOnly('2026-02-29'), false);
+    assert.equal(api.isValidDateOnly('not-a-date'), false);
+    assert.equal(api.addDaysToDateOnly('2026-10-28', 7), '2026-11-04');
+    assert.equal(api.addDaysToDateOnly('2026-12-31', 1), '2027-01-01');
+    assert.equal(api.addDaysToDateOnly('invalid', 7), null);
+    assert.equal(api.isDateOnlyBetween('2026-10-28', '2026-10-28', '2026-11-04'), true);
+    assert.equal(api.isDateOnlyBetween('2026-10-31', '2026-10-28', '2026-11-04'), true);
+    assert.equal(api.isDateOnlyBetween('2026-11-04', '2026-10-28', '2026-11-04'), true);
+    assert.equal(api.isDateOnlyBetween('2026-11-05', '2026-10-28', '2026-11-04'), false);
+    assert.equal(api.isDateOnlyBetween('2026-10-27', '2026-10-28', '2026-11-04'), false);
+    assert.equal(api.isDateOnlyBetween(null, '2026-10-28', '2026-11-04'), false);
+    assert.equal(api.isDateOnlyBetween('2026-99-99', '2026-10-28', '2026-11-04'), false);
+    assert.equal(api.isOpportunityClosingSoon({ status: 'active', closingDate: '2026-10-28' }, '2026-10-28'), true);
+    assert.equal(api.isOpportunityClosingSoon({ status: 'active', closingDate: '2026-10-31' }, '2026-10-28'), true);
+    assert.equal(api.isOpportunityClosingSoon({ status: 'active', closingDate: '2026-11-04' }, '2026-10-28'), true);
+    assert.equal(api.isOpportunityClosingSoon({ status: 'active', closingDate: '2026-11-05' }, '2026-10-28'), false);
+    assert.equal(api.isOpportunityClosingSoon({ status: 'active', closingDate: '2026-10-27' }, '2026-10-28'), false);
+    assert.equal(api.isOpportunityClosingSoon({ status: 'closed', closingDate: '2026-10-31' }, '2026-10-28'), false);
+    assert.equal(api.isOpportunityClosingSoon({ status: 'active', closingDate: null }, '2026-10-28'), false);
+    assert.equal(api.isOpportunityClosingSoon({ status: 'active', closingDate: '2026-99-99' }, '2026-10-28'), false);
+    assert.equal(api.getCurrentDateOnly(new Date('2026-10-28T23:59:59.000Z')), '2026-10-28');
+  });
+
   it('uses the API origin on a local frontend and a relative base elsewhere', () => {
     const api = require('../js/api.js');
 
@@ -1127,7 +1164,7 @@ describe('Frontend API client', () => {
       const page = Number(requestUrl.searchParams.get('page'));
       const items = page === 1
         ? [{ id: 'skillbridge-001', title: 'First', organisation: 'Org' }]
-        : [{ id: 'skillbridge-101', title: 'Second', organisation: 'Org' }];
+        : [{ id: 'skillbridge-101', title: 'Expired second-page record', organisation: 'Org', closing_date: '2000-01-01', status: 'closed' }];
 
       return {
         ok: true,
@@ -1144,6 +1181,8 @@ describe('Frontend API client', () => {
       const result = await api.listAllOpportunities({ category: 'Job', sort: 'closing_date' }, { baseUrl: '/api' });
 
       assert.deepEqual(result.items.map((item) => item.id), ['skillbridge-001', 'skillbridge-101']);
+      assert.equal(result.items[1].closingDate, '2000-01-01');
+      assert.equal(result.items[1].status, 'closed');
       assert.deepEqual(result.pagination, { page: 1, limit: 100, total: 101, totalPages: 2 });
       assert.deepEqual(requests.map((url) => url.searchParams.get('page')), ['1', '2']);
       assert.ok(requests.every((url) => url.searchParams.get('category') === 'Job'));

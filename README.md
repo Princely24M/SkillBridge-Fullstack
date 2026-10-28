@@ -197,6 +197,8 @@ The existing frontend dataset at `data/opportunities.json` contains **100 record
 
 Each JSON opportunity uses legacy camelCase fields such as `id`, `title`, `organisation`, `category`, `location`, `closingDate`, `experienceLevel`, `description`, `eligibility`, `requiredDocuments`, `applicationInstructions`, `officialApplicationUrl`, `sourceUrl`, `sourceName`, `lastVerified`, `verificationStatus`, `verificationLevel`, `status`, `isVerified`, and `isSample`. All 100 current records have `isSample: false` and `verificationStatus: "verified"`; 87 are marked active and 13 expired. These records are not queried by the Stage 2 API.
 
+The Supabase migration `20261028100000_close_expired_opportunities.sql` allows the `closed` status, marks every record with a past `closing_date` as closed, and keeps verified expired records readable through the public API for the Expired filter. Apply pending migrations to the Supabase project when deploying this change.
+
 ---
 
 ## 10. Accessibility Features (WCAG 2.1)

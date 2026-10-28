@@ -27,6 +27,10 @@ const OPPORTUNITY_COLUMNS = [
 const SEARCH_FIELDS = ['title', 'organisation', 'description', 'location'];
 const PAGE_SIZE = 1000;
 
+function getTodayDateOnly() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 class DataAccessError extends Error {
   constructor(code = 'UNKNOWN') {
     super('Supabase opportunity query failed.');
@@ -40,13 +44,14 @@ function escapeLikePattern(value) {
 }
 
 function publicOpportunityQuery(supabase) {
+  const today = getTodayDateOnly();
   return supabase
     .from('opportunities')
     .select(OPPORTUNITY_COLUMNS, { count: 'exact' })
-    .eq('status', 'active')
     .eq('is_verified', true)
     .eq('is_sample', false)
-    .eq('verification_status', 'verified');
+    .eq('verification_status', 'verified')
+    .or(`status.eq.active,closing_date.lt.${today}`);
 }
 
 async function readAllRows(supabase, filters, searchField) {

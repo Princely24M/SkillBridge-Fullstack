@@ -38,9 +38,6 @@ function normalizeSavedOpportunities() {
   localStorage.setItem('skillbridge_saved', JSON.stringify(APP_STATE.savedOpportunities));
 }
 
-// South African Reference Date (Synchronized with 2026 dataset timeline: 2026-10-06)
-const CURRENT_DATE = new Date('2026-10-06T10:00:00');
-
 function getApiBaseUrl() {
   return window.SkillBridgeAPI.getDefaultBaseUrl();
 }
@@ -324,33 +321,26 @@ async function refreshOpportunitiesFromApi({ showError = true, onUpdate } = {}) 
  * Check if opportunity deadline has expired
  */
 function isOpportunityExpired(item) {
-  if (!item) return false;
-  if (item.status === 'expired') return true;
-  if (!item.closingDate) return false;
-  const closingDate = new Date(`${item.closingDate}T23:59:59`);
-  return closingDate < CURRENT_DATE;
+  if (!item || !window.SkillBridgeAPI.isValidDateOnly(item.closingDate)) return false;
+  return item.closingDate < window.SkillBridgeAPI.getCurrentDateOnly();
 }
 
 /**
  * Check if opportunity is closing within 7 days
  */
 function isClosingSoon(item) {
-  if (!item || isOpportunityExpired(item)) return false;
-  if (!item.closingDate) return false;
-  const closingDate = new Date(`${item.closingDate}T23:59:59`);
-  const diffTime = closingDate - CURRENT_DATE;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays >= 0 && diffDays <= 7;
+  return window.SkillBridgeAPI.isOpportunityClosingSoon(item);
 }
 
 /**
  * Calculate days remaining until closing date
  */
 function getDaysRemaining(item) {
-  if (!item || !item.closingDate) return null;
-  const closingDate = new Date(`${item.closingDate}T23:59:59`);
-  const diffTime = closingDate - CURRENT_DATE;
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  if (!item || !window.SkillBridgeAPI.isValidDateOnly(item.closingDate)) return null;
+  const today = window.SkillBridgeAPI.getCurrentDateOnly();
+  const closingDate = new Date(`${item.closingDate}T00:00:00.000Z`);
+  const currentDate = new Date(`${today}T00:00:00.000Z`);
+  return Math.round((closingDate - currentDate) / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -359,8 +349,8 @@ function getDaysRemaining(item) {
 function formatDate(dateStr) {
   if (!dateStr) return 'Ongoing / Open';
   const options = { year: 'numeric', month: 'short', day: 'numeric' };
+  if (!window.SkillBridgeAPI.isValidDateOnly(dateStr)) return dateStr;
   const d = new Date(`${dateStr}T12:00:00`);
-  if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString('en-ZA', options);
 }
 
@@ -723,6 +713,12 @@ function initOpportunitiesPage() {
 
     const filtered = APP_STATE.opportunities.filter(item => {
       const isExpired = isOpportunityExpired(item);
+      const dateFilter = APP_STATE.currentFilter.closingDate;
+
+      if (['Expired', 'Closing Soon'].includes(dateFilter)
+        && (APP_STATE.datasetMeta?.source !== 'api' || item.isSample)) {
+        return false;
+      }
 
       if (APP_STATE.currentFilter.showBookmarkedOnly) {
         const savedIds = new Set(APP_STATE.savedOpportunities.map(String));
@@ -794,11 +790,11 @@ function initOpportunitiesPage() {
       } else if (APP_STATE.currentFilter.closingDate === 'This Month') {
         if (!item.closingDate || isExpired) return false;
         const itemMonth = item.closingDate.substring(0, 7);
-        if (itemMonth !== '2026-10') return false;
+        if (itemMonth !== window.SkillBridgeAPI.getCurrentDateOnly().substring(0, 7)) return false;
       } else if (APP_STATE.currentFilter.closingDate === 'Future') {
         if (!item.closingDate || isExpired) return false;
         const itemMonth = item.closingDate.substring(0, 7);
-        if (itemMonth <= '2026-10') return false;
+        if (itemMonth <= window.SkillBridgeAPI.getCurrentDateOnly().substring(0, 7)) return false;
       } else if (APP_STATE.currentFilter.closingDate === 'Ongoing') {
         if (item.closingDate !== null || isExpired) return false;
       } else if (APP_STATE.currentFilter.closingDate === 'Expired') {

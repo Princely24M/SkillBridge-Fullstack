@@ -19,6 +19,47 @@
     return DEFAULT_BASE_URL;
   }
 
+  function getCurrentDateOnly(now = new Date()) {
+    return now.toISOString().slice(0, 10);
+  }
+
+  function isValidDateOnly(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }
+
+  function addDaysToDateOnly(value, days) {
+    if (!isValidDateOnly(value) || !Number.isInteger(days)) {
+      return null;
+    }
+
+    const date = new Date(`${value}T00:00:00.000Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  }
+
+  function isDateOnlyBetween(value, start, end) {
+    return isValidDateOnly(value)
+      && isValidDateOnly(start)
+      && isValidDateOnly(end)
+      && value >= start
+      && value <= end;
+  }
+
+  function isOpportunityClosingSoon(item, today = getCurrentDateOnly()) {
+    if (!item || item.status !== 'active') {
+      return false;
+    }
+
+    const lastClosingSoonDate = addDaysToDateOnly(today, 7);
+    return lastClosingSoonDate !== null
+      && isDateOnlyBetween(item.closingDate || item.closing_date, today, lastClosingSoonDate);
+  }
+
   function buildUrl(path, baseUrl) {
     const normalizedBase = normalizeBaseUrl(baseUrl);
     const normalizedPath = String(path || '').replace(/^\/+/, '');
@@ -221,6 +262,11 @@
   const api = {
     DEFAULT_BASE_URL,
     getDefaultBaseUrl,
+    getCurrentDateOnly,
+    isValidDateOnly,
+    addDaysToDateOnly,
+    isDateOnlyBetween,
+    isOpportunityClosingSoon,
     buildUrl,
     requestJson,
     normalizeOpportunity,

@@ -82,8 +82,19 @@ function parseListQuery(query) {
   };
 }
 
+function isExpiredByDate(item, today = new Date().toISOString().slice(0, 10)) {
+  if (typeof item.closing_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(item.closing_date)) {
+    return false;
+  }
+
+  const parsedDate = new Date(`${item.closing_date}T00:00:00.000Z`);
+  return Number.isFinite(parsedDate.getTime())
+    && parsedDate.toISOString().slice(0, 10) === item.closing_date
+    && item.closing_date < today;
+}
+
 function isPublicOpportunity(item) {
-  return item.status === 'active'
+  return (item.status === 'active' || isExpiredByDate(item))
     && item.is_verified === true
     && item.is_sample === false
     && item.verification_status === 'verified';
@@ -196,7 +207,11 @@ function summarizeOpportunityMetrics(items) {
   const totalOpportunities = normalized.length;
   const publishedOpportunities = normalized.filter((item) => item.status === 'active' && item.is_verified === true).length;
   const draftOpportunities = normalized.filter((item) => item.status === 'draft' || item.status === 'pending').length;
-  const expiredOpportunities = normalized.filter((item) => item.status === 'expired' || (item.closing_date && new Date(item.closing_date) < new Date())).length;
+  const expiredOpportunities = normalized.filter((item) => (
+    item.status === 'expired'
+    || item.status === 'closed'
+    || isExpiredByDate(item)
+  )).length;
   const awaitingReview = normalized.filter((item) => item.verification_status === 'needs_review' || item.verification_status === 'pending').length;
 
   return {
@@ -232,7 +247,7 @@ function buildOpportunityPayload(body = {}, fallbackId = undefined) {
     official_application_url: String(body?.official_application_url || '').trim(),
     source_url: String(body?.source_url || '').trim(),
     source_name: String(body?.source_name || '').trim() || organisation,
-    status: ['draft', 'active', 'expired', 'pending'].includes(String(body?.status || 'draft').trim()) ? String(body.status).trim() : 'draft',
+    status: ['draft', 'active', 'expired', 'closed', 'pending'].includes(String(body?.status || 'draft').trim()) ? String(body.status).trim() : 'draft',
     verification_status: ['verified', 'pending', 'needs_review'].includes(String(body?.verification_status || 'pending').trim()) ? String(body.verification_status).trim() : 'pending',
     verification_level: String(body?.verification_level || 'manual').trim() || 'manual',
     is_verified: Boolean(body?.is_verified ?? false),
@@ -545,7 +560,7 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
 
       if (error?.code === '23514' || message.includes('check constraint') || message.includes('violates check constraint')) {
         return res.status(400).json({
-          error: { code: 'OPPORTUNITY_STATUS_INVALID', message: 'The Supabase opportunities table is using an older status constraint. Update the table schema to allow draft, active, expired, and pending values, then try again.' }
+          error: { code: 'OPPORTUNITY_STATUS_INVALID', message: 'The Supabase opportunities table is using an older status constraint. Update the table schema to allow draft, active, expired, closed, and pending values, then try again.' }
         });
       }
 
@@ -609,7 +624,7 @@ function createApp({ opportunities, logger = console, authConfig = null, supabas
 
       if (error?.code === '23514' || message.includes('check constraint') || message.includes('violates check constraint')) {
         return res.status(400).json({
-          error: { code: 'OPPORTUNITY_STATUS_INVALID', message: 'The Supabase opportunities table is using an older status constraint. Update the table schema to allow draft, active, expired, and pending values, then try again.' }
+          error: { code: 'OPPORTUNITY_STATUS_INVALID', message: 'The Supabase opportunities table is using an older status constraint. Update the table schema to allow draft, active, expired, closed, and pending values, then try again.' }
         });
       }
 
