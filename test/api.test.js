@@ -634,6 +634,15 @@ describe('Admin route protection', () => {
       assert.equal(result.status, 401);
       const body = await result.json();
       assert.equal(body.error.code, 'UNAUTHORIZED');
+      const auditResult = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/audit-logs`);
+      assert.equal(auditResult.status, 401);
+
+      const missingStatusService = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/metrics`, {
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' ') }
+      });
+      assert.equal(missingStatusService.status, 503);
+      const missingStatusBody = await missingStatusService.json();
+      assert.equal(missingStatusBody.error.code, 'ACCOUNT_STATUS_UNAVAILABLE');
     } finally {
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
@@ -655,6 +664,16 @@ describe('Admin route protection', () => {
             };
           }
         }
+      },
+      from(table) {
+        assert.equal(table, 'profiles');
+        return {
+          select() { return this; },
+          eq() { return this; },
+          maybeSingle() {
+            return Promise.resolve({ data: { account_status: 'active' }, error: null });
+          }
+        };
       }
     };
 
@@ -678,6 +697,33 @@ describe('Admin route protection', () => {
       authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
       supabaseClient: createAuthClient('candidate', { role: 'admin' })
     });
+    const appWithInactiveAdmin = createApp({
+      opportunities: createFixtureRepository([]).repository,
+      authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
+      supabaseClient: createAuthClient('admin'),
+      adminClient: {
+        auth: { admin: {} },
+        async rpc() {
+          return {
+            data: null,
+            error: {
+              code: '23514',
+              message: 'new row for relation "opportunities" violates check constraint "opportunities_status_check"'
+            }
+          };
+        },
+        from(table) {
+          assert.equal(table, 'profiles');
+          return {
+            select() { return this; },
+            eq() { return this; },
+            maybeSingle() {
+              return Promise.resolve({ data: { account_status: 'inactive' }, error: null });
+            }
+          };
+        }
+      }
+    });
 
     const start = async (instance) => {
       const server = instance.listen(0);
@@ -688,6 +734,7 @@ describe('Admin route protection', () => {
     const candidateServer = await start(appWithCandidate);
     const adminServer = await start(appWithAdmin);
     const selfDeclaredAdminServer = await start(appWithSelfDeclaredAdmin);
+    const inactiveAdminServer = await start(appWithInactiveAdmin);
 
     try {
       const candidateResult = await fetch(`http://127.0.0.1:${candidateServer.address().port}/api/admin/metrics`, {
@@ -710,57 +757,170 @@ describe('Admin route protection', () => {
         headers: { Authorization: 'Bearer token' }
       });
       assert.equal(selfDeclaredAdminResult.status, 403);
+
+      const inactiveAdminResult = await fetch(`http://127.0.0.1:${inactiveAdminServer.address().port}/api/admin/metrics`, {
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' ') }
+      });
+      assert.equal(inactiveAdminResult.status, 403);
+      assert.equal((await inactiveAdminResult.json()).error.code, 'ACCOUNT_INACTIVE');
     } finally {
       await Promise.all([
         new Promise((resolve, reject) => candidateServer.close((error) => error ? reject(error) : resolve())),
         new Promise((resolve, reject) => adminServer.close((error) => error ? reject(error) : resolve())),
-        new Promise((resolve, reject) => selfDeclaredAdminServer.close((error) => error ? reject(error) : resolve()))
+        new Promise((resolve, reject) => selfDeclaredAdminServer.close((error) => error ? reject(error) : resolve())),
+        new Promise((resolve, reject) => inactiveAdminServer.close((error) => error ? reject(error) : resolve()))
       ]);
     }
   });
 
-  it('lists users and lets an admin update a user role', async () => {
+  it('lists users and manages invitations, profile fields, roles, statuses, and safe deletion', async () => {
+    const auditEvents = [];
+    let lastAuditSearchArgs;
+    const authUsers = [
+      {
+        id: 'user-1',
+        email: 'candidate@example.com',
+        app_metadata: { role: 'candidate', account_status: 'active' },
+        user_metadata: { full_name: 'Candidate User' },
+        created_at: '2026-01-01T00:00:00Z'
+      },
+      {
+        id: 'admin-1',
+        email: 'admin@example.com',
+        app_metadata: { role: 'admin', account_status: 'active' },
+        user_metadata: { full_name: 'Admin User' },
+        created_at: '2026-01-02T00:00:00Z'
+      }
+    ];
+    const profiles = new Map(authUsers.map((user) => [user.id, {
+      id: user.id,
+      full_name: user.user_metadata.full_name,
+      account_status: user.app_metadata.account_status,
+      updated_at: '2026-01-04T00:00:00Z'
+    }]));
+    profiles.set('admin-user', {
+      id: 'admin-user',
+      full_name: 'Admin User',
+      account_status: 'active',
+      updated_at: '2026-01-04T00:00:00Z'
+    });
+
+    function profileQuery() {
+      let profileId;
+      return {
+        select() { return this; },
+        eq(column, value) {
+          if (column === 'id') profileId = value;
+          return this;
+        },
+        maybeSingle() {
+          return Promise.resolve({ data: profiles.get(profileId) || null, error: null });
+        },
+        range(from, to) {
+          return Promise.resolve({
+            data: [...profiles.values()].slice(from, to + 1),
+            error: null
+          });
+        },
+        upsert(profile) {
+          profiles.set(profile.id, { ...profile });
+          return {
+            select() {
+              return {
+                single() {
+                  return Promise.resolve({ data: profiles.get(profile.id), error: null });
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+
     const adminClient = {
       auth: {
         admin: {
-          async listUsers() {
+          async listUsers({ page, perPage }) {
             return {
-              data: {
-                users: [
-                  {
-                    id: 'user-1',
-                    email: 'candidate@example.com',
-                    app_metadata: { role: 'candidate' },
-                    user_metadata: { full_name: 'Candidate User' },
-                    created_at: '2026-01-01T00:00:00Z'
-                  },
-                  {
-                    id: 'admin-1',
-                    email: 'admin@example.com',
-                    app_metadata: { role: 'admin' },
-                    user_metadata: { full_name: 'Admin User' },
-                    created_at: '2026-01-02T00:00:00Z'
-                  }
-                ]
-              },
+              data: { users: authUsers.slice((page - 1) * perPage, page * perPage) },
               error: null
             };
           },
+          async inviteUserByEmail(email, options) {
+            if (authUsers.some((user) => user.email === email)) {
+              return { data: null, error: { message: 'User already registered' } };
+            }
+            const user = {
+              id: 'invited-user',
+              email,
+              app_metadata: {},
+              user_metadata: options.data,
+              created_at: '2026-01-05T00:00:00Z'
+            };
+            authUsers.push(user);
+            profiles.set(user.id, {
+              id: user.id,
+              full_name: options.data.full_name,
+              account_status: 'active',
+              updated_at: '2026-01-05T00:00:00Z'
+            });
+            return { data: { user }, error: null };
+          },
           async updateUserById(userId, update) {
+            const user = authUsers.find((item) => item.id === userId);
+            if (!user) return { data: null, error: { message: 'User not found' } };
+            Object.assign(user, {
+              ...('email' in update ? { email: update.email } : {}),
+              app_metadata: update.app_metadata || user.app_metadata,
+              user_metadata: update.user_metadata || user.user_metadata
+            });
             return {
-              data: {
-                user: {
-                  id: userId,
-                  email: 'candidate@example.com',
-                  app_metadata: update.app_metadata,
-                  user_metadata: { full_name: 'Candidate User' },
-                  created_at: '2026-01-01T00:00:00Z'
-                }
-              },
+              data: { user },
               error: null
             };
+          },
+          async deleteUser(userId) {
+            const index = authUsers.findIndex((item) => item.id === userId);
+            if (index < 0) return { error: { message: 'User not found' } };
+            authUsers.splice(index, 1);
+            profiles.delete(userId);
+            return { error: null };
           }
         }
+      },
+      from(table) {
+        if (table === 'audit_logs') {
+          return {
+            insert(event) {
+              auditEvents.push({ ...event, id: `audit-${auditEvents.length + 1}`, created_at: new Date().toISOString() });
+              return Promise.resolve({ error: null });
+            }
+          };
+        }
+        assert.equal(table, 'profiles');
+        return profileQuery();
+      },
+      async rpc(name, args) {
+        if (name === 'admin_audit_actors') {
+          return {
+            data: [...new Map(auditEvents.map((event) => [event.actor_user_id, {
+              actor_user_id: event.actor_user_id,
+              actor_name: event.actor_name,
+              actor_email: event.actor_email
+            }])).values()],
+            error: null
+          };
+        }
+        if (name === 'admin_search_audit_logs') {
+          lastAuditSearchArgs = args;
+          const start = (args.p_page - 1) * args.p_limit;
+          return {
+            data: auditEvents.slice(start, start + args.p_limit)
+              .map((event) => ({ ...event, total_count: auditEvents.length })),
+            error: null
+          };
+        }
+        throw new Error(`Unexpected RPC: ${name}`);
       }
     };
 
@@ -782,6 +942,7 @@ describe('Admin route protection', () => {
       const users = await usersResponse.json();
       assert.equal(users.users.length, 2);
       assert.equal(users.users[0].role, 'candidate');
+      assert.deepEqual(users.counts, { total: 2, active: 2, awaiting: 0, inactive: 0 });
 
       const updateResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users/user-1/role`, {
         method: 'PATCH',
@@ -794,15 +955,150 @@ describe('Admin route protection', () => {
       assert.equal(updateResponse.status, 200);
       const updated = await updateResponse.json();
       assert.equal(updated.user.role, 'admin');
+      assert.equal(authUsers[0].app_metadata.account_status, 'active');
+
+      const elevateResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users/user-1`, {
+        method: 'PATCH',
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' '), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: 'super_admin' })
+      });
+      assert.equal(elevateResponse.status, 403);
+
+      const statusResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users/user-1`, {
+        method: 'PATCH',
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' '), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'inactive' })
+      });
+      assert.equal(statusResponse.status, 200);
+      assert.equal((await statusResponse.json()).user.status, 'inactive');
+      assert.equal(profiles.get('user-1').account_status, 'inactive');
+
+      const nameAndEmailResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users/user-1`, {
+        method: 'PATCH',
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' '), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: 'Updated Candidate',
+          email: 'updated@example.com',
+          status: 'active'
+        })
+      });
+      assert.equal(nameAndEmailResponse.status, 200);
+      const edited = await nameAndEmailResponse.json();
+      assert.equal(edited.user.full_name, 'Updated Candidate');
+      assert.equal(edited.user.email, 'updated@example.com');
+      assert.equal(edited.user.status, 'active');
+      assert.equal(profiles.get('user-1').full_name, 'Updated Candidate');
+      assert.equal(auditEvents[0].action, 'user.role_changed');
+      assert.deepEqual(auditEvents[0].new_values, { role: 'admin' });
+      assert.equal(auditEvents[1].action, 'user.status_changed');
+      assert.equal(auditEvents[2].action, 'user.updated');
+      assert.deepEqual(Object.keys(auditEvents[2].new_values).sort(), ['email', 'full_name']);
+      assert.equal(auditEvents[3].action, 'user.status_changed');
+      assert.deepEqual(auditEvents[3].new_values, { status: 'active' });
+
+      const inviteResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users`, {
+        method: 'POST',
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' '), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: 'New Candidate',
+          email: 'new@example.com'
+        })
+      });
+      assert.equal(inviteResponse.status, 201);
+      const invited = await inviteResponse.json();
+      assert.equal(invited.user.role, 'candidate');
+      assert.equal(invited.user.status, 'awaiting');
+      assert.equal(invited.user.password, undefined);
+      assert.equal(authUsers.filter((user) => user.email === 'new@example.com').length, 1);
+      assert.equal(auditEvents[4].action, 'user.created');
+
+      const duplicateResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users`, {
+        method: 'POST',
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' '), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: 'Duplicate', email: 'new@example.com' })
+      });
+      assert.equal(duplicateResponse.status, 409);
+      assert.equal(auditEvents[5].action, 'user.created');
+      assert.equal(auditEvents[5].status, 'failure');
+
+      const deleteResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users/user-1`, {
+        method: 'DELETE',
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' ') }
+      });
+      assert.equal(deleteResponse.status, 200);
+      assert.equal(authUsers.some((user) => user.id === 'user-1'), false);
+      assert.equal(profiles.has('user-1'), false);
+      assert.equal(auditEvents[6].action, 'user.deleted');
+
+      const historyResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/audit-logs?range=all&page=1&limit=2`, {
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' ') }
+      });
+      assert.equal(historyResponse.status, 200);
+      const history = await historyResponse.json();
+      assert.equal(history.items.length, 2);
+      assert.equal(history.pagination.total, 7);
+      assert.equal(history.pagination.totalPages, 4);
+
+      const filteredHistory = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/admin/audit-logs?range=custom&from=2026-01-01&to=2026-01-31&action=user.created&entity_type=user&status=success&q=New&limit=1`,
+        { headers: { Authorization: ['Bearer', 'admin-test-token'].join(' ') } }
+      );
+      assert.equal(filteredHistory.status, 200);
+      assert.equal(lastAuditSearchArgs.p_from, '2026-01-01T00:00:00.000Z');
+      assert.equal(lastAuditSearchArgs.p_to, '2026-02-01T00:00:00.000Z');
+      assert.equal(lastAuditSearchArgs.p_action, 'user.created');
+      assert.equal(lastAuditSearchArgs.p_entity_type, 'user');
+      assert.equal(lastAuditSearchArgs.p_status, 'success');
+      assert.equal(lastAuditSearchArgs.p_search, 'New');
+
+      const invalidDateRange = await fetch(
+        `http://127.0.0.1:${server.address().port}/api/admin/audit-logs?range=custom&from=2026-02-01&to=2026-01-01`,
+        { headers: { Authorization: ['Bearer', 'admin-test-token'].join(' ') } }
+      );
+      assert.equal(invalidDateRange.status, 400);
+
+      const deleteLastAdmin = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users/admin-1`, {
+        method: 'DELETE',
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' ') }
+      });
+      assert.equal(deleteLastAdmin.status, 400);
+
+      const deleteSelf = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/users/admin-user`, {
+        method: 'DELETE',
+        headers: { Authorization: ['Bearer', 'admin-test-token'].join(' ') }
+      });
+      assert.equal(deleteSelf.status, 400);
     } finally {
       await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
   });
 
   it('allows an admin to create opportunities, update them, delete them, and update their own profile', async () => {
+    const auditEvents = [];
+    let opportunityRecord = null;
+    const managedProfiles = [{
+      id: 'admin-user',
+      full_name: 'Admin User',
+      account_status: 'active',
+      updated_at: '2026-01-02T00:00:00Z'
+    }];
     const adminClient = {
       auth: {
         admin: {
+          async listUsers() {
+            return {
+              data: {
+                users: [{
+                  id: 'admin-user',
+                  email: 'admin@example.com',
+                  app_metadata: { role: 'admin', account_status: 'active' },
+                  user_metadata: { full_name: 'Admin User' },
+                  created_at: '2026-01-02T00:00:00Z'
+                }]
+              },
+              error: null
+            };
+          },
           async updateUserById(userId, update) {
             return {
               data: {
@@ -819,7 +1115,61 @@ describe('Admin route protection', () => {
           }
         }
       },
+      async rpc(name, args) {
+        assert.equal(name, 'admin_manage_opportunity');
+        if (args.p_operation === 'create') {
+          opportunityRecord = { ...args.p_payload };
+          auditEvents.push({ action: 'opportunity.created', status: 'success' });
+          return { data: { found: true, record: opportunityRecord }, error: null };
+        }
+        if (args.p_operation === 'update') {
+          const previous = opportunityRecord;
+          if (!previous || previous.id !== args.p_id) {
+            return { data: { found: false, record: null }, error: null };
+          }
+          const updated = { ...args.p_payload };
+          if (previous.status !== updated.status) {
+            auditEvents.push({
+              action: 'opportunity.status_changed',
+              status: 'success',
+              old_values: { opportunity_status: previous.status },
+              new_values: { opportunity_status: updated.status }
+            });
+          }
+          const oldValues = {};
+          const newValues = {};
+          for (const field of ['title', 'closing_date']) {
+            if (previous[field] !== updated[field]) {
+              oldValues[field] = previous[field];
+              newValues[field] = updated[field];
+            }
+          }
+          if (Object.keys(newValues).length) {
+            auditEvents.push({ action: 'opportunity.updated', status: 'success', old_values: oldValues, new_values: newValues });
+          }
+          opportunityRecord = updated;
+          return { data: { found: true, record: opportunityRecord }, error: null };
+        }
+        if (args.p_operation === 'delete') {
+          if (!opportunityRecord || opportunityRecord.id !== args.p_id) {
+            return { data: { found: false, record: null }, error: null };
+          }
+          const deleted = opportunityRecord;
+          opportunityRecord = null;
+          auditEvents.push({ action: 'opportunity.deleted', status: 'success' });
+          return { data: { found: true, record: deleted }, error: null };
+        }
+        throw new Error(`Unexpected operation: ${args.p_operation}`);
+      },
       from(table) {
+        if (table === 'audit_logs') {
+          return {
+            insert(event) {
+              auditEvents.push(event);
+              return Promise.resolve({ error: null });
+            }
+          };
+        }
         if (table === 'opportunities') {
           return {
             select() {
@@ -835,6 +1185,7 @@ describe('Admin route protection', () => {
                             organisation: 'SkillBridge',
                             category: 'Job',
                             location: 'Cape Town',
+                            closing_date: '2030-12-31',
                             status: 'active',
                             is_verified: true,
                             verification_status: 'verified'
@@ -886,7 +1237,10 @@ describe('Admin route protection', () => {
                                 organisation: payload.organisation,
                                 category: payload.category,
                                 location: payload.location,
+                                closing_date: payload.closing_date,
                                 status: payload.status,
+                                is_verified: payload.is_verified,
+                                verification_status: payload.verification_status,
                                 updated_at: '2026-01-04T00:00:00Z'
                               },
                               error: null
@@ -923,10 +1277,39 @@ describe('Admin route protection', () => {
             }
           };
         }
+        let profileId;
         return {
           select() { return this; },
-          eq() { return this; },
-          maybeSingle() { return Promise.resolve({ data: null, error: null }); }
+          eq(column, value) {
+            if (column === 'id') profileId = value;
+            return this;
+          },
+          maybeSingle() {
+            return Promise.resolve({
+              data: managedProfiles.find((profile) => profile.id === profileId) || null,
+              error: null
+            });
+          },
+          range(from, to) {
+            return Promise.resolve({ data: managedProfiles.slice(from, to + 1), error: null });
+          },
+          upsert(profile) {
+            const existing = managedProfiles.find((item) => item.id === profile.id);
+            if (existing) Object.assign(existing, profile);
+            else managedProfiles.push(profile);
+            return {
+              select() {
+                return {
+                  single() {
+                    return Promise.resolve({
+                      data: managedProfiles.find((item) => item.id === profile.id),
+                      error: null
+                    });
+                  }
+                };
+              }
+            };
+          }
         };
       }
     };
@@ -949,6 +1332,7 @@ describe('Admin route protection', () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          id: 'skillbridge-new',
           title: 'Data Analyst',
           organisation: 'SkillBridge',
           category: 'Job',
@@ -989,6 +1373,28 @@ describe('Admin route protection', () => {
       const updated = await updateResponse.json();
       assert.equal(updated.opportunity.title, 'Senior Data Analyst');
 
+      const closeResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/opportunities/skillbridge-new`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: ['Bearer', 'admin-test-token'].join(' '),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: 'Senior Data Analyst',
+          organisation: 'SkillBridge',
+          category: 'Job',
+          location: 'Cape Town',
+          closing_date: '2031-12-31',
+          experience_level: 'Senior',
+          description: 'Updated analyst role',
+          status: 'closed',
+          is_verified: true,
+          is_sample: false,
+          verification_status: 'verified'
+        })
+      });
+      assert.equal(closeResponse.status, 200);
+
       const deleteResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/admin/opportunities/skillbridge-new`, {
         method: 'DELETE',
         headers: { Authorization: 'Bearer token' }
@@ -996,14 +1402,52 @@ describe('Admin route protection', () => {
       assert.equal(deleteResponse.status, 200);
       const removed = await deleteResponse.json();
       assert.equal(removed.deleted.id, 'skillbridge-new');
+      assert.deepEqual(auditEvents.slice(0, 4).map((event) => event.action), [
+        'opportunity.created',
+        'opportunity.updated',
+        'opportunity.status_changed',
+        'opportunity.deleted'
+      ]);
+      assert.deepEqual(auditEvents[1].old_values, { title: 'Data Analyst', closing_date: '2030-12-31' });
+      assert.deepEqual(auditEvents[1].new_values, { title: 'Senior Data Analyst', closing_date: '2031-12-31' });
+      assert.deepEqual(auditEvents[2].old_values, { opportunity_status: 'active' });
+      assert.deepEqual(auditEvents[2].new_values, { opportunity_status: 'closed' });
 
+      const failedAuditEvents = [];
       const schemaMismatchApp = createApp({
         opportunities: createFixtureRepository([]).repository,
         authConfig: { url: 'https://example.supabase.co', key: 'sb_publishable_test' },
         supabaseClient: createAuthClient('admin'),
         adminClient: {
           auth: { admin: {} },
-          from() {
+          async rpc(name) {
+            assert.equal(name, 'admin_manage_opportunity');
+            return {
+              data: null,
+              error: {
+                code: '23514',
+                message: 'new row for relation "opportunities" violates check constraint "opportunities_status_check"'
+              }
+            };
+          },
+          from(table) {
+            if (table === 'profiles') {
+              return {
+                select() { return this; },
+                eq() { return this; },
+                maybeSingle() {
+                  return Promise.resolve({ data: { account_status: 'active' }, error: null });
+                }
+              };
+            }
+            if (table === 'audit_logs') {
+              return {
+                insert(event) {
+                  failedAuditEvents.push(event);
+                  return Promise.resolve({ error: null });
+                }
+              };
+            }
             return {
               insert() {
                 return {
@@ -1045,6 +1489,8 @@ describe('Admin route protection', () => {
         assert.equal(schemaMismatchResponse.status, 400);
         const schemaMismatchBody = await schemaMismatchResponse.json();
         assert.equal(schemaMismatchBody.error.code, 'OPPORTUNITY_STATUS_INVALID');
+        assert.equal(failedAuditEvents.length, 1);
+        assert.equal(failedAuditEvents[0].status, 'failure');
       } finally {
         await new Promise((resolve, reject) => schemaMismatchServer.close((error) => error ? reject(error) : resolve()));
       }

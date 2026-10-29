@@ -31,7 +31,7 @@ https://skillbridge-fullstack-wcj0.onrender.com/
 15. [Testing & Quality Assurance](#15-testing--quality-assurance)
 16. [Known Limitations](#16-known-limitations)
 17. [Future Improvements](#17-future-improvements)
-18. [Read-Only API Backend](#18-read-only-api-backend)
+18. [API Backend and Admin Management](#18-api-backend-and-admin-management)
 
 ---
 
@@ -126,9 +126,9 @@ This application is strictly built with vanilla web technologies to highlight co
 * **Vanilla JavaScript (ES6+):** Async/await `fetch`, DOM manipulation, query string parsing (`URLSearchParams`), `localStorage`, array filters, event delegation.
 * **JSON:** Structured data source representing demonstration opportunities.
 * **Vector Graphics (SVG):** Custom-designed vector logo, favicon, and hero pathway illustration.
-* **Read-only backend (Stage 2):** Node.js, Express, and the Supabase JavaScript client.
+* **API backend:** Node.js, Express, and the Supabase JavaScript client.
 
-> **Frontend:** No React, Vue, Angular, Bootstrap, or Tailwind CSS are used. The Stage 2 API is separate from the existing frontend.
+> **Frontend:** No React, Vue, Angular, Bootstrap, or Tailwind CSS are used. The pages call the project's Express API.
 
 ---
 
@@ -384,9 +384,9 @@ The application underwent rigorous manual and automated test suites:
 
 ---
 
-## 18. Read-Only API Backend
+## 18. API Backend and Admin Management
 
-Stage 2 adds an Express API for public reads from the existing Supabase `public.opportunities` table. The API is separate from the current frontend, which continues to load `data/opportunities.json`.
+The Express API serves public reads from the existing Supabase `public.opportunities` table and protected admin operations. The public opportunities pages and admin dashboard use the API; they do not use hardcoded user records.
 
 ### Requirements and setup
 
@@ -398,7 +398,7 @@ npm install
 copy .env.example .env
 ```
 
-Edit `.env` and set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (or the legacy public `SUPABASE_ANON_KEY`). `PORT` is optional and defaults to `3000`. Use only a Supabase publishable/anon key; privileged keys are rejected. `.env` is ignored by Git.
+Edit `.env` and set `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` (or the legacy public `SUPABASE_ANON_KEY`). Admin user and opportunity management also requires `SUPABASE_SERVICE_ROLE_KEY` on the server. Keep that key private, never place it in frontend files, and never expose it through the API. `PORT` is optional and defaults to `3000`. `.env` is ignored by Git.
 
 ### Start and test
 
@@ -417,22 +417,28 @@ npm test
 - `GET /api/health` — liveness response: `{ "ok": true, "service": "skillbridge-api" }`.
 - `GET /api/opportunities?q=developer&category=Job&location=Johannesburg&page=1&limit=20&sort=closing_date` — paginated list with `{ "items": [], "pagination": { "page": 1, "limit": 20, "total": 0, "totalPages": 0 } }`. `q` searches title, organisation, description, and location; category is an exact filter; location is a case-insensitive partial filter. `page` must be positive, `limit` is 1–100, and `sort` is `closing_date` or `newest`.
 - `GET /api/opportunities/skillbridge-106` — one opportunity by its text ID, returned as `{ "item": { ... } }`.
+- `GET /api/admin/users` — authorized, full user listing and account-status counts.
+- `POST /api/admin/users` — send an authorized Supabase invitation and create the profile.
+- `PATCH /api/admin/users/:id` — update full name, email, role, or account status.
+- `DELETE /api/admin/users/:id` — delete an authentication identity; profile and saved-opportunity rows cascade through their foreign keys.
+- `GET /api/admin/audit-logs` — authorized, paginated persistent audit history with date, actor, action, resource, result, and search filters.
+- `GET /api/admin/audit-logs/actors` — administrators present in the retained audit history.
 
-Successful reads return `200`; invalid query/ID input returns `400`; an unknown or ineligible ID returns `404`; unexpected failures return a sanitized `500` JSON error. List results include only active, verified, non-sample opportunities with `verification_status = 'verified'`. Supabase RLS remains enabled and authoritative, including its current-date deadline rule: null deadlines remain eligible and expired records are excluded. The API applies the same status/verification checks and narrows results to `verification_status = 'verified'`; the supplied RLS eligibility description does not list that verification-status check, so API access is intentionally stricter. No policy changes are made.
+Public opportunity reads return active and date-expired records that are verified, non-sample, and have `verification_status = 'verified'`. Expired records remain available for the Expired filter. Supabase RLS remains enabled and authoritative. Invalid query/ID input returns `400`; unknown or ineligible IDs return `404`; unexpected failures return sanitized JSON errors.
 
 To keep keyword matching and totals accurate without constructing a raw PostgREST `or` expression from user input, the API reads eligible matches for each searchable field, deduplicates them by ID, then sorts and paginates in memory. This is appropriate for the current directory but may need a database-supported search strategy if the public dataset grows substantially.
 
-This stage is read-only: it does not change the Supabase schema or any opportunity records. Tests use injected/mock data access and do not connect to Supabase.
+User administration is available only through the protected API using the server-side service-role key. New accounts are created by invitation, never with an admin-supplied password. The API prevents self-deletion or self-demotion and blocks changes that would leave no active administrator. User-management actions are recorded after the Supabase Auth/profile operation succeeds. Opportunity mutations use a restricted database function that writes the mutation and audit event in one transaction. The Activity page retrieves history in pages, filters on the server, and polls for new entries while open. Audit records are retained and are not deleted when the related user or opportunity is removed. Apply the audit-log migration before using these protected operations. Tests use injected/mock data access and do not connect to Supabase.
 
 ### Candidate authentication and authorization
 
 Registration and login use the Supabase browser client with persisted, automatically refreshed Supabase sessions. The browser receives only the publishable/anon key through `GET /api/auth-config`; never expose a service-role key. Configure the API's `SUPABASE_URL` and public key in `.env`, and set the Supabase Auth Site URL and allowed redirect URLs for the local or deployed site. Email confirmation follows the Supabase project's Auth settings.
 
-Apply `supabase/migrations/20261020140000_candidate_profiles_and_saved_opportunities.sql` before using candidate accounts. Supabase Auth creates the identity; an `auth.users` database trigger creates the candidate profile from validated user metadata, with a fallback name. Passwords are handled only by Supabase Auth and are never copied into application tables. The profile table has no client insert grant, and its row-level security policies allow a candidate to read and update only their own profile. Saved opportunities have equivalent owner-only select, insert, and delete policies. The profile page also filters by the active user ID, but database RLS is the authorization boundary.
+Apply the Supabase migrations in timestamp order before using the database-backed application: `20261020140000_candidate_profiles_and_saved_opportunities.sql`, `20261023120000_admin_opportunities_table.sql`, `20261028100000_close_expired_opportunities.sql`, `20261028110000_admin_user_management.sql`, and `20261028113000_admin_audit_logs.sql`. Supabase Auth creates the identity; an `auth.users` database trigger creates the profile. Passwords are handled only by Supabase Auth and are never copied into application tables. RLS keeps profiles owner-scoped, allows onboarding profile access while `awaiting`, and allows saved-opportunity operations only while `active`. Inactive accounts lose protected database access immediately because RLS checks the persisted profile status.
 
 After login, candidates land on a dashboard with the saved count and list, current verified opportunity count, recently added listings, device-local recently viewed items, and editable profile basics. The recent-history list remains on the current browser/device and is not synced to the account. Application tracking, personalized recommendations, and notification preferences are not implemented and are not presented as available features. The dashboard theme follows the operating-system preference by default and persists a candidate's explicit light/dark choice.
 
-Published opportunity browsing remains public. This project does not implement administrator or opportunity-manager roles, private enquiries, or public role assignment. Privileged opportunity changes are not granted to candidates; any future elevated role must be assigned through a trusted administrative process and enforced in database policies or a validated backend.
+Published opportunity browsing remains public. Admin and super-admin roles are read from trusted Supabase app metadata and are enforced by the backend. The service-role key must remain server-only. No dedicated audit-log table exists; administrative changes are emitted through the server logger.
 
 ---
 

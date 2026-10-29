@@ -44,15 +44,112 @@
       <main class="admin-content">
         <section class="admin-panel">
           <div class="admin-panel-header">
-            <h2>Recent administrative actions</h2>
+            <h2>Administrative audit history</h2>
+            <button class="btn btn-secondary" type="button" data-audit-refresh>Refresh</button>
           </div>
-          <ul class="admin-activity-list" data-admin-activity>
-            <li>Audit records will appear here once admin actions are logged.</li>
-          </ul>
+          <div class="admin-form-grid audit-filter-grid" aria-label="Audit filters">
+            <div class="admin-form-row">
+              <label for="audit-range">Date range</label>
+              <select id="audit-range" data-audit-range>
+                <option value="30d">Last 30 days</option>
+                <option value="today">Today</option>
+                <option value="7d">Last 7 days</option>
+                <option value="90d">Last 90 days</option>
+                <option value="custom">Custom range</option>
+                <option value="all">All time</option>
+              </select>
+            </div>
+            <div class="admin-form-row" data-audit-custom hidden>
+              <label for="audit-from">From</label>
+              <input id="audit-from" type="date" data-audit-from />
+            </div>
+            <div class="admin-form-row" data-audit-custom hidden>
+              <label for="audit-to">To</label>
+              <input id="audit-to" type="date" data-audit-to />
+            </div>
+            <div class="admin-form-row">
+              <label for="audit-actor">Administrator</label>
+              <select id="audit-actor" data-audit-actor>
+                <option value="">All administrators</option>
+              </select>
+            </div>
+            <div class="admin-form-row">
+              <label for="audit-action">Action</label>
+              <select id="audit-action" data-audit-action>
+                <option value="">All actions</option>
+                <option value="user.created">User created</option>
+                <option value="user.updated">User updated</option>
+                <option value="user.role_changed">Role changed</option>
+                <option value="user.status_changed">Account status changed</option>
+                <option value="user.deleted">User deleted</option>
+                <option value="opportunity.created">Opportunity created</option>
+                <option value="opportunity.updated">Opportunity updated</option>
+                <option value="opportunity.status_changed">Opportunity status changed</option>
+                <option value="opportunity.deleted">Opportunity deleted</option>
+              </select>
+            </div>
+            <div class="admin-form-row">
+              <label for="audit-resource">Resource</label>
+              <select id="audit-resource" data-audit-resource>
+                <option value="">All resources</option>
+                <option value="user">Users</option>
+                <option value="opportunity">Opportunities</option>
+              </select>
+            </div>
+            <div class="admin-form-row">
+              <label for="audit-status">Result</label>
+              <select id="audit-status" data-audit-status>
+                <option value="">All results</option>
+                <option value="success">Successful</option>
+                <option value="failure">Failed</option>
+              </select>
+            </div>
+            <div class="admin-form-row audit-search-row">
+              <label for="audit-search">Search history</label>
+              <input id="audit-search" type="search" maxlength="100" placeholder="Description, resource or ID" data-audit-search />
+            </div>
+          </div>
+          <div class="admin-panel-header audit-toolbar">
+            <span class="admin-panel-meta" data-audit-total aria-live="polite"></span>
+            <button class="btn btn-secondary btn-small" type="button" data-audit-clear>Clear filters</button>
+          </div>
+          <p class="auth-message" data-audit-message role="alert" aria-live="polite" hidden></p>
+          <div class="admin-table-wrap">
+            <table class="admin-table audit-table">
+              <thead>
+                <tr>
+                  <th>Date and time</th>
+                  <th>Administrator</th>
+                  <th>Action</th>
+                  <th>Resource</th>
+                  <th>Description</th>
+                  <th>Result</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody data-admin-activity>
+                <tr><td colspan="7">Loading audit history…</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="admin-panel-header audit-toolbar">
+            <span class="admin-panel-meta" data-audit-page-info></span>
+            <div class="table-actions">
+              <button class="btn btn-secondary btn-small" type="button" data-audit-prev>Previous</button>
+              <button class="btn btn-secondary btn-small" type="button" data-audit-next>Next</button>
+            </div>
+          </div>
         </section>
       </main>
     </div>
   </div>
+  <dialog class="admin-panel audit-detail-dialog" data-audit-dialog aria-labelledby="audit-dialog-title">
+    <div class="admin-panel-header">
+      <h2 id="audit-dialog-title">Audit event details</h2>
+      <button class="btn btn-secondary btn-small" type="button" data-audit-close>Close</button>
+    </div>
+    <div data-audit-details></div>
+  </dialog>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/api.js"></script>
   <script src="../js/admin.js"></script>

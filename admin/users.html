@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Admin Users | SkillBridge</title>
-  <meta name="description" content="Review registered users and account status in the admin area." />
+  <meta name="description" content="Manage SkillBridge user accounts, roles, and status." />
   <link rel="icon" type="image/svg+xml" href="../images/favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -47,6 +47,49 @@
         <section class="admin-panel">
           <div class="admin-panel-header">
             <h2>Registered users</h2>
+            <button class="btn btn-primary" type="button" data-user-add>Add User</button>
+          </div>
+          <div class="admin-chart-placeholder" aria-live="polite">
+            <div class="chart-block"><span>Total users</span><strong data-user-count="total">—</strong></div>
+            <div class="chart-block"><span>Active</span><strong data-user-count="active">—</strong></div>
+            <div class="chart-block"><span>Awaiting</span><strong data-user-count="awaiting">—</strong></div>
+            <div class="chart-block"><span>Inactive</span><strong data-user-count="inactive">—</strong></div>
+          </div>
+          <p class="auth-message" data-user-message role="status" aria-live="polite" hidden></p>
+          <div class="admin-form-grid" style="margin: 1.25rem 0;">
+            <div class="admin-form-row">
+              <label for="user-search">Search name or email</label>
+              <input id="user-search" type="search" autocomplete="off" />
+            </div>
+            <div class="admin-form-row">
+              <label for="user-role-filter">Role</label>
+              <select id="user-role-filter">
+                <option value="all">All roles</option>
+                <option value="candidate">Candidate</option>
+                <option value="admin">Admin</option>
+                <option value="super_admin">Super admin</option>
+              </select>
+            </div>
+            <div class="admin-form-row">
+              <label for="user-status-filter">Account status</label>
+              <select id="user-status-filter">
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="awaiting">Awaiting</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="admin-form-row">
+              <label for="user-sort">Sort by</label>
+              <select id="user-sort">
+                <option value="created_desc">Newest first</option>
+                <option value="created_asc">Oldest first</option>
+                <option value="name_asc">Name A–Z</option>
+                <option value="name_desc">Name Z–A</option>
+                <option value="email_asc">Email A–Z</option>
+                <option value="email_desc">Email Z–A</option>
+              </select>
+            </div>
           </div>
           <div class="admin-table-wrap">
             <table class="admin-table">
@@ -57,17 +100,67 @@
                   <th>Role</th>
                   <th>Status</th>
                   <th>Created</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody data-admin-users>
-                <tr><td colspan="5">Loading users…</td></tr>
+                <tr><td colspan="7">Loading users…</td></tr>
               </tbody>
             </table>
+          </div>
+          <div class="admin-panel-header" style="margin: 1rem 0 0;">
+            <span class="admin-panel-meta" data-user-page-info></span>
+            <div class="table-actions">
+              <button class="btn btn-secondary btn-small" type="button" data-user-page-prev>Previous</button>
+              <button class="btn btn-secondary btn-small" type="button" data-user-page-next>Next</button>
+            </div>
           </div>
         </section>
       </main>
     </div>
   </div>
+
+  <dialog class="admin-panel" data-user-dialog aria-labelledby="user-dialog-title">
+    <form class="admin-settings-form" data-user-form>
+      <div class="admin-panel-header">
+        <h2 id="user-dialog-title" data-user-dialog-title>Add user</h2>
+        <button class="btn btn-secondary btn-small" type="button" data-user-dialog-close aria-label="Close dialog">Close</button>
+      </div>
+      <p class="admin-panel-meta">New accounts receive a secure email invitation to set their own password.</p>
+      <div class="admin-form-row">
+        <label for="managed-user-name">Full name</label>
+        <input id="managed-user-name" name="full_name" type="text" maxlength="160" required autocomplete="name" />
+      </div>
+      <div class="admin-form-row">
+        <label for="managed-user-email">Email address</label>
+        <input id="managed-user-email" name="email" type="email" maxlength="254" required autocomplete="email" />
+      </div>
+      <div class="admin-form-grid">
+        <div class="admin-form-row">
+          <label for="managed-user-role">Role</label>
+          <select id="managed-user-role" name="role" required>
+            <option value="candidate">Candidate</option>
+            <option value="admin">Admin</option>
+            <option value="super_admin">Super admin</option>
+          </select>
+        </div>
+        <div class="admin-form-row">
+          <label for="managed-user-status">Account status</label>
+          <select id="managed-user-status" name="status" required>
+            <option value="active">Active</option>
+            <option value="awaiting">Awaiting</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <p class="auth-message" data-user-dialog-message role="alert" aria-live="polite" hidden></p>
+      <div class="admin-panel-header">
+        <button class="btn btn-secondary" type="button" data-user-dialog-cancel>Cancel</button>
+        <button class="btn btn-primary" type="submit" data-user-submit>Send invitation</button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../js/api.js"></script>

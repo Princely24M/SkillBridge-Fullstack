@@ -4459,6 +4459,93 @@ ul, ol {
   background: var(--surface-alt);
 }
 
+.admin-activity-list li small {
+  display: block;
+  margin-top: 0.35rem;
+  color: var(--text-muted);
+}
+
+.audit-filter-grid {
+  margin: 1.25rem 0;
+  align-items: end;
+}
+
+.audit-filter-grid [hidden] {
+  display: none;
+}
+
+.audit-search-row {
+  grid-column: span 2;
+}
+
+.audit-toolbar {
+  margin: 0.75rem 0;
+}
+
+.audit-table {
+  min-width: 1050px;
+}
+
+.audit-table td {
+  vertical-align: top;
+}
+
+.audit-table td small {
+  color: var(--text-muted);
+}
+
+.audit-result-success {
+  color: var(--secondary-dark);
+}
+
+.audit-result-failure {
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.audit-detail-dialog {
+  width: min(720px, calc(100vw - 2rem));
+  max-width: 720px;
+  max-height: min(85vh, 760px);
+  overflow: auto;
+  margin: auto;
+}
+
+.audit-detail-dialog::backdrop {
+  background: rgb(10 25 40 / 58%);
+}
+
+.audit-detail-list,
+.audit-change-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.audit-detail-list > div,
+.audit-change-list > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.35fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.audit-detail-list dt,
+.audit-change-list dt {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.audit-detail-list dd,
+.audit-change-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.audit-change-list dd strong {
+  color: var(--text);
+}
+
 .admin-table-wrap {
   overflow-x: auto;
 }
@@ -4613,6 +4700,51 @@ ul, ol {
 
 [data-user-role-select]:hover {
   border-color: var(--secondary-light);
+}
+
+.user-status-active {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.user-status-awaiting {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.user-status-inactive {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+[data-user-status] {
+  min-height: 38px;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
+[data-user-dialog] {
+  width: min(42rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: 90vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+[data-user-dialog]::backdrop {
+  background: rgba(10, 36, 58, 0.62);
+}
+
+[data-user-dialog] .admin-panel-header {
+  margin-bottom: 0.5rem;
+}
+
+[data-theme="dark"] [data-user-dialog] {
+  background: var(--surface);
 }
 
 .admin-auth-body {
